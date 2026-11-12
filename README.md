@@ -8,9 +8,8 @@ Repository: [DwiAldi/nana-card-game](https://github.com/DwiAldi/nana-card-game).
 
 The upstream demo is available at [https://nana.cyron.site](https://nana.cyron.site).
 
-It supports creating rooms and joining others' rooms.
-
-This website is hosted on `Vercel`, made with `NextJS` and `Framer motion`, and uses `Redis` to store server states.
+It supports creating rooms and joining others' rooms. The maintained deployment
+target is a Docker-based VPS with a private Redis service.
 
 ## Development Roadmap
 
@@ -37,6 +36,16 @@ npm run dev
 ```
 
 Visit http://localhost:2333 in your browser.
+
+## VPS Deployment
+
+The production Compose stack binds the application only to
+`127.0.0.1:3000`; expose it through an HTTPS reverse proxy. Redis is available
+only on the private Compose network and requires a deployment-provided
+password.
+
+See [docs/deployment.md](docs/deployment.md) for environment setup, launch,
+health checks, updates, rollback, and recovery guidance.
 
 ## Disclaimer
 
