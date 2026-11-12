@@ -84,6 +84,24 @@ Verification at that checkpoint: lint (zero warnings), typecheck, 186 of 186 tes
 
 Stage 6 (atomic Redis persistence, expiry, and throttling) and stage 7 (route and client integration) remain; the API routes still serve the legacy protocol until stage 7 replaces them.
 
+### Atomic Redis persistence (stage 6, part A)
+
+Commit `21f0c4b` replaced `src/lib/redis.ts` and added the atomic game store:
+
+- The Redis client connects lazily through a single shared connection promise cached for hot reload, attaches an error listener, applies a finite reconnect policy (five attempts with backoff), and enforces a five-second connect timeout and command timeout. No connection is attempted at import or build time; the production build succeeds with `REDIS_URL` unset or pointing at an unreachable host. A missing URL raises a configuration error naming only the variable, and connection failures raise a generic unavailability error with the cause logged redacted.
+- `createGame` uses `SET` with a not-exists condition and a one-hour expiry, mints room identifiers server-side with cryptographic randomness in the accepted format, retries collisions a bounded number of times, and never overwrites an existing room.
+- `updateGame` watches the room key on an isolated connection, reads the state, applies the transition to a clone, and writes atomically with the expiry preserved; conflicts retry up to five times before a 409 is returned, and the connection is released with its watch cleared in a `finally` block. A transition that changes nothing skips the write, so polling neither rewrites state nor extends idle expiry. Settlement runs through the same path.
+- Chat is trimmed to the newest 100 messages on every persist.
+- Integration tests run against a disposable Redis instance keyed by a per-run prefix: concurrent joins lose no player, racing reveals and polls collect exactly once and advance the turn exactly once, room creation never overwrites, the expiry stays positive and is preserved across mutations, polling does not extend it, and chat is capped. Without `TEST_REDIS_URL` the suite is skipped with an explicit message; with it, 201 tests pass. A separate leak probe over 50 transactions showed the connected-client count rising only from one shared client to two including the administrative client.
+
+#### Stage 7 wiring constraints identified during review
+
+- A retried transition re-runs against the fresh state. For a player reveal that resolves to the player's minimum or maximum card, a retry can therefore reveal the next card instead of failing. The approved specification requires only `roomId`, `targetPlayerId`, and the min/max choice in the payload, so no concrete card identifier is mandated; the precondition must nevertheless be enforced in the engine, which is the only layer that observes the state committed inside the transaction, so the route layer cannot evaluate it atomically.
+- The transaction callback result is not awaited defensively. A transition returning a promise would serialize as an empty document and overwrite the room, so stage 7 must await the result and validate its shape.
+- The new repository and the legacy writer use the same `game:<roomId>` key space. The legacy writer drops the expiry and is not atomic, so stage 7 must retire the legacy routes in the same change that switches clients over.
+- Room identifiers are now minted by the server. The client must navigate with the identifier returned by the host response instead of the client-generated one.
+- Redis configuration and unavailability errors are not API errors and map to the generic 503 through the central error mapper without exposing the connection string.
+
 ### Runtime image preflight
 
 Both official images were pulled successfully and their binaries executed:
