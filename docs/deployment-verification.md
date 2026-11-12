@@ -144,3 +144,25 @@ Both official images were pulled successfully and their binaries executed:
 - `redis:8.10.3-alpine`: `redis-server --version` returned `8.10.3`; image digest `sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3`.
 
 These are runtime preflight checks, not application-container verification.
+
+### Docker/VPS delivery (stage 8)
+
+Commit `9b3c211` added the production delivery artifacts and operational guide:
+
+- The multi-stage `Dockerfile` installs with `npm ci`, builds the required standalone output on `node:26.13.1-bookworm-slim`, copies only the standalone server, static assets, and public files into the runtime stage, and runs as UID/GID 1001 rather than root.
+- `compose.yaml` binds only the application to `127.0.0.1:3000`. Redis 8.10.3 has no published host port, requires a deployment-provided password, persists to a named volume, and must become healthy before the app starts. Both services have restart policies and `no-new-privileges` enabled.
+- `/api/health` performs a Redis PING bounded to three seconds and returns only `{"status":"ok"}` or a generic 503 `{"status":"unavailable"}` with `Cache-Control: no-store`. Three unit tests cover success, failure redaction, and a never-settling Redis operation.
+- Global response headers add nosniff, strict-origin referrer policy, frame denial, and disabled camera/geolocation/microphone permissions; `X-Powered-By` is disabled. CSP remains intentionally deferred until it can be validated against the rendered Chakra/Next application.
+- `.env.example`, `.dockerignore`, `.gitignore`, README deployment links, and `docs/deployment.md` document exact-origin configuration, HTTPS proxying, secret generation, trusted-proxy boundaries, startup, readiness, updates, backups, rollback, volume recovery, and the artwork attribution/licensing caveat.
+
+Fresh stage-8 verification:
+
+- `docker compose config --quiet` passed with disposable environment values.
+- An isolated `nana-stage8-smoke` Compose project built successfully with Node 26.13.1 and started both services healthy. The runtime build included the dynamic `/api/health` route and retained standalone output.
+- The app container reported `uid=1001(nextjs) gid=1001(nodejs)`. Redis inspection returned `{"6379/tcp":null}`, confirming no host binding; the app alone reported `127.0.0.1:3000->3000/tcp`.
+- `/api/health` returned 200 and exactly `{"status":"ok"}`. With Redis stopped it returned generic 503 in 1.395 seconds; after Redis restarted it recovered to 200.
+- Response inspection found `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY`, and the restrictive permissions policy, with no `X-Powered-By` header.
+- A two-client container smoke test passed host/join/start, viewer-scoped hidden state, wrong-turn 403, reveal/chat, missing-session 401, identity-spoof 400, and foreign-origin 403. Production cookie flags included `Secure`, `HttpOnly`, and `SameSite=Strict`. Restarting the app container preserved both Redis-backed sessions and game state.
+- Fresh repository checks passed: lint and typecheck; 252 unit/non-Redis tests with 46 explicit integration skips; 295 of 295 tests against disposable Redis 8.10.3; and the Webpack standalone production build. The known high transitive audit finding remains a release blocker for stage 10.
+
+No public deployment was performed.
