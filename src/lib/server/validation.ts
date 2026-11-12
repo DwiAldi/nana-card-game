@@ -34,8 +34,12 @@ export type ActionRequest =
     }
   | { action: "chat"; roomId: string; message: string };
 
-/** Room ids: bounded ASCII, currently base36 timestamps joined client-side. */
-const ROOM_ID_PATTERN = /^[a-z0-9]{4,32}$/;
+/**
+ * Room ids: bounded lowercase ASCII. The server mints them, so the same
+ * pattern is used to validate incoming ids and to check the ids the server
+ * generated itself.
+ */
+export const ROOM_ID_PATTERN = /^[a-z0-9]{4,32}$/;
 /**
  * Card ids are 96-bit opaque values minted by the server
  * (`randomBytes(12).toString("hex")`): 24 lowercase hex characters that
