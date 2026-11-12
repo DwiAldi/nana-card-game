@@ -2,7 +2,7 @@ import { getRedis } from "@/lib/redis";
 import { NextRequest } from "next/server";
 import { ServerState } from "@/types";
 import { getCurrentAndNextPlayer, findWinner } from "@/lib/game-helper";
-import { setGameOver, settleAndNextRound } from "@/app/api/action/route";
+import { setGameOver, settleAndNextRound } from "@/lib/server-game-state";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -30,11 +30,11 @@ export async function GET(request: NextRequest) {
   if (serverState?.gameSubStage === "sub:settling") {
     if (Date.now() - serverState.timestamp > 2000) {
       // start to settle
-      let [currentPlayer] = getCurrentAndNextPlayer(serverState.players);
+      const [currentPlayer] = getCurrentAndNextPlayer(serverState.players);
       if (currentPlayer.id === playerId) {
         await settleAndNextRound(gameId, serverState);
 
-        let winner = findWinner(serverState);
+        const winner = findWinner(serverState);
         if (winner) {
           await setGameOver(gameId, serverState, winner.id);
         }

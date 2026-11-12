@@ -4,47 +4,49 @@ import React from "react";
 import { BsQuestionCircle } from "react-icons/bs";
 import {
   IconButton,
-  Modal,
-  Button,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalCloseButton,
-  ModalBody,
+  CloseButton,
+  Dialog,
+  Portal,
   Text,
-  ModalFooter,
   VStack,
   useDisclosure,
 } from "@chakra-ui/react";
 
 const GameRuleButton = () => {
-  const { isOpen, onOpen, onClose } = useDisclosure();
+  const { open, onOpen, onClose } = useDisclosure();
 
   return (
     <>
       <IconButton
         variant="outline"
         color="white"
-        colorScheme="none"
+        colorPalette="gray"
         aria-label="Mute"
         size="sm"
         fontSize="20px"
         onClick={() => onOpen()}
-        icon={<BsQuestionCircle />}
-      />
+      >
+        <BsQuestionCircle />
+      </IconButton>
 
-      <Modal isOpen={isOpen} onClose={onClose}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Game rules</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
+      <Dialog.Root open={open} onOpenChange={(event) => !event.open && onClose()}>
+        <Portal>
+          <Dialog.Backdrop />
+          <Dialog.Positioner>
+            <Dialog.Content>
+              <Dialog.Header>
+                <Dialog.Title>Game rules</Dialog.Title>
+              </Dialog.Header>
+              <Dialog.CloseTrigger asChild>
+                <CloseButton size="sm" />
+              </Dialog.CloseTrigger>
+              <Dialog.Body>
             <VStack alignItems="start">
               <Text>Collect sets of three cards with the same number.</Text>
               <Text>The deck has 36 cards: three copies of each number from 1 to 12.</Text>
               <Text>Starting a challenge:</Text>
               <Text>
-                On your turn, reveal any player's lowest or highest card, or any card in the public area.
+                On your turn, reveal any player&apos;s lowest or highest card, or any card in the public area.
               </Text>
               <Text>A challenge has two possible outcomes:</Text>
               <Text>
@@ -64,11 +66,12 @@ const GameRuleButton = () => {
                 Note: With two players, remove 11s and 12s. With three players, remove 12s. With four to six players, use all 36 cards.
               </Text>
             </VStack>
-          </ModalBody>
-
-          <ModalFooter>{/*<Button variant="ghost">OK</Button>*/}</ModalFooter>
-        </ModalContent>
-      </Modal>
+              </Dialog.Body>
+              <Dialog.Footer />
+            </Dialog.Content>
+          </Dialog.Positioner>
+        </Portal>
+      </Dialog.Root>
     </>
   );
 };

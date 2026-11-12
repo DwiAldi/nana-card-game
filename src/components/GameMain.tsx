@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useEffectEvent } from "react";
 import {
   Box,
   Button,
@@ -17,7 +17,7 @@ import PublicArea from "@/components/PublicArea";
 import { calculateDisplayPlayerIndices } from "@/lib/game-helper";
 import { useGameToast } from "@/lib/use-game-toast";
 import Confetti from "react-confetti";
-import { useWindowSize } from "react-use";
+import { useWindowSize } from "@/lib/use-window-size";
 import ChatArea from "@/components/ChatArea";
 import BigToast from "@/components/BigToast";
 import { useGameSound } from "@/lib/use-game-sound";
@@ -28,16 +28,14 @@ export default function GameMain({
   act,
 }: {
   serverState: ServerState;
-  act: (action: ActionPrefix, data?: any) => void;
+  act: (action: ActionPrefix, data?: unknown) => void;
 }) {
   // hooks
   const { playerId } = useGameSettingsStore();
   const { width, height } = useWindowSize();
-  const [bigToastMessage, setBigToastMessage] = useState<string | undefined>();
 
-  const { toastError, toastInfo, toastOk } = useGameToast();
-  const { playWoosh, playWin, playSwing, playFlip, playSuccess, playDingDong } =
-    useGameSound();
+  const { toastInfo } = useGameToast();
+  const { playWoosh, playWin, playDingDong } = useGameSound();
 
   // calculations
   const playingPlayer = serverState.players.find((p) => p.isPlaying);
@@ -48,28 +46,38 @@ export default function GameMain({
     serverState.players,
   );
 
-  // effects
-  useEffect(() => {
+  const announceCurrentPlayer = useEffectEvent(() => {
     if (isMePlaying) {
       playDingDong();
-      setBigToastMessage("Your turn");
-    } else if (playingPlayer) {
-      setBigToastMessage(`${playingPlayer.name}'s turn`);
-    } else {
-      setBigToastMessage(undefined);
     }
+  });
+
+  const announceGameStage = useEffectEvent(() => {
+    if (serverState.gameStage === "stage:game-over") {
+      playWin();
+    }
+    if (serverState.gameStage === "stage:in-game") {
+      playWoosh();
+    }
+  });
+
+  const bigToastMessage =
+    serverState.gameStage === "stage:game-over"
+      ? "Game over"
+      : playingPlayer
+        ? isMePlaying
+          ? "Your turn"
+          : `${playingPlayer.name}'s turn`
+        : undefined;
+
+  // effects
+  useEffect(() => {
+    announceCurrentPlayer();
   }, [playingPlayer?.id]);
 
   useEffect(() => {
-    if (serverState?.gameStage === "stage:game-over") {
-      playWin();
-      setBigToastMessage("Game over");
-    }
-    if (serverState?.gameStage === "stage:in-game") {
-      playWoosh();
-      setBigToastMessage("Game started");
-    }
-  }, [serverState?.gameStage]);
+    announceGameStage();
+  }, [serverState.gameStage]);
 
   // render
   return (
@@ -77,16 +85,14 @@ export default function GameMain({
       w="100vw"
       h="100vh"
       bgColor={gameBgColor}
-      sx={{
-        position: "relative",
-      }}
+      position="relative"
       justifyContent="space-evenly"
     >
-      <VStack sx={{ position: "fixed", top: "16px", right: "16px" }}>
+      <VStack position="fixed" top="16px" right="16px">
         <HStack>
           <Text color="white">Game ID:</Text>
-          <Tag
-            colorScheme="gray"
+          <Tag.Root
+            colorPalette="gray"
             cursor="pointer"
             onClick={() => {
               const joinUrl = `${window.location.origin}?join=${serverState.gameId}`;
@@ -94,13 +100,12 @@ export default function GameMain({
               toastInfo("Invite link copied to clipboard");
             }}
           >
-            {serverState.gameId}
-          </Tag>
+            <Tag.Label>{serverState.gameId}</Tag.Label>
+          </Tag.Root>
         </HStack>
         <Button
-          colorScheme="blue"
+          colorPalette="blue"
           onClick={() => act("action:start-game")}
-          // isDisabled={gameStage !== "seat"}
         >
           Start game
         </Button>
@@ -162,7 +167,7 @@ export default function GameMain({
         ></PlayerArea>
       </VStack>
 
-      <Box sx={{ position: "fixed", bottom: 2, left: 2 }}>
+      <Box position="fixed" bottom="2" left="2">
         {/*<Text color="white">*/}
         {/*  Server state: {serverState.gameStage} - {serverState.gameSubStage} -{" "}*/}
         {/*  {serverState.timestamp}*/}

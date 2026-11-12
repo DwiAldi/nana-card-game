@@ -5,7 +5,7 @@ import PokerCard from "@/components/PokerCard";
 const Page = () => {
   return (
     <Center w="100vw" h="100vh" bgColor="gray">
-      <PokerCard w="182px" h="256px"></PokerCard>
+      <PokerCard w="182px" h="256px" layoutId="deal-poker-card" />
     </Center>
   );
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useEffectEvent } from "react";
 import {
   Box,
   Button,
@@ -9,14 +9,11 @@ import {
   VStack,
   Text,
   Heading,
-  Select,
+  NativeSelect,
   Card,
-  CardBody,
-  CardFooter,
-  Divider,
-  IconButton,
+  Separator,
 } from "@chakra-ui/react";
-import { useWindowSize } from "react-use";
+import { useWindowSize } from "@/lib/use-window-size";
 import Confetti from "react-confetti";
 import { useRouter } from "next/navigation";
 import { BsArrowLeft } from "react-icons/bs";
@@ -74,25 +71,28 @@ function ConfigScreen() {
           </Text>
         </VStack>
 
-        <Card w="sm" bg="gray.800" color="white">
-          <CardBody>
-            <VStack spacing="24px" alignItems="start">
+        <Card.Root w="sm" bg="gray.800" color="white">
+          <Card.Body>
+            <VStack gap="24px" alignItems="start">
               <Heading size="md">{t("GAME_SETTINGS")}</Heading>
 
-              <VStack w="100%" alignItems="start" spacing="12px">
+              <VStack w="100%" alignItems="start" gap="12px">
                 <Text>{t("SELECT_BOT_COUNT")}:</Text>
-                <Select
-                  value={botCount}
-                  onChange={(e) => setBotCount(parseInt(e.target.value))}
-                  bg="gray.700"
-                  borderColor="gray.600"
-                >
-                  <option value={1}>{t("BOT_COUNT_1")}</option>
-                  <option value={2}>{t("BOT_COUNT_2")}</option>
-                  <option value={3}>{t("BOT_COUNT_3")}</option>
-                  <option value={4}>{t("BOT_COUNT_4")}</option>
-                  <option value={5}>{t("BOT_COUNT_5")}</option>
-                </Select>
+                <NativeSelect.Root>
+                  <NativeSelect.Field
+                    value={botCount}
+                    onChange={(e) => setBotCount(Number(e.target.value))}
+                    bg="gray.700"
+                    borderColor="gray.600"
+                  >
+                    <option value={1}>{t("BOT_COUNT_1")}</option>
+                    <option value={2}>{t("BOT_COUNT_2")}</option>
+                    <option value={3}>{t("BOT_COUNT_3")}</option>
+                    <option value={4}>{t("BOT_COUNT_4")}</option>
+                    <option value={5}>{t("BOT_COUNT_5")}</option>
+                  </NativeSelect.Field>
+                  <NativeSelect.Indicator />
+                </NativeSelect.Root>
               </VStack>
 
               <VStack
@@ -101,7 +101,7 @@ function ConfigScreen() {
                 bg="gray.700"
                 borderRadius="8px"
                 alignItems="start"
-                spacing="8px"
+                gap="8px"
               >
                 <Text fontWeight="bold">{t("GAME_CONFIG")}:</Text>
                 <HStack justify="space-between" w="100%">
@@ -122,23 +122,22 @@ function ConfigScreen() {
                 </HStack>
               </VStack>
             </VStack>
-          </CardBody>
-          <Divider borderColor="gray.600" />
-          <CardFooter justifyContent="space-between">
+          </Card.Body>
+          <Separator borderColor="gray.600" />
+          <Card.Footer justifyContent="space-between">
             <Button
               size="sm"
               variant="ghost"
-              colorScheme="gray"
-              leftIcon={<BsArrowLeft />}
+              colorPalette="gray"
               onClick={() => router.push("/")}
             >
-              {t("BACK")}
+              <BsArrowLeft /> {t("BACK")}
             </Button>
-            <Button size="sm" colorScheme="green" onClick={startGame}>
+            <Button size="sm" colorPalette="green" onClick={startGame}>
               {t("START_GAME")}
             </Button>
-          </CardFooter>
-        </Card>
+          </Card.Footer>
+        </Card.Root>
       </VStack>
     </Center>
   );
@@ -155,41 +154,38 @@ function GameScreen() {
     publicCards,
     cardDeck,
     currentPlayerIndex,
-    winner,
     turnMessage,
     resetGame,
     revealPlayerCard,
     revealPublicCard,
-    isCurrentPlayerBot,
-    getMyPlayer,
     getCurrentPlayer,
-    executeBotTurn,
   } = useLocalGameStore();
 
-  const { playWoosh, playWin, playSuccess, playDingDong } = useGameSound();
-  const { toastInfo, toastError, toastOk } = useGameToast();
+  const { playWin, playDingDong } = useGameSound();
+  const { toastInfo } = useGameToast();
   const router = useRouter();
 
-  const [bigToastMessage, setBigToastMessage] = useState<string | undefined>();
-
   const currentPlayer = getCurrentPlayer();
-  const myPlayer = getMyPlayer();
   const isMyTurn = currentPlayer?.id === "me";
   const gameBgColor = isMyTurn ? "green.700" : "gray.700";
 
+  const showTurnMessage = useEffectEvent(() => {
+    if (!turnMessage) return;
+    if (isMyTurn) playDingDong();
+  });
+
+  const playGameOverSound = useEffectEvent(() => {
+    playWin();
+  });
+
   // Sound and toast effects
   useEffect(() => {
-    if (turnMessage) {
-      setBigToastMessage(turnMessage);
-      if (isMyTurn) {
-        playDingDong();
-      }
-    }
+    showTurnMessage();
   }, [turnMessage, currentPlayerIndex]);
 
   useEffect(() => {
     if (gameStage === "game-over") {
-      playWin();
+      playGameOverSound();
     }
   }, [gameStage]);
 
@@ -281,7 +277,7 @@ function GameScreen() {
     const bottomRow = others.slice(Math.ceil(others.length / 2));
 
     return (
-      <VStack w="100%" spacing="8px">
+      <VStack w="100%" gap="8px">
         <HStack w="100%" justify="space-around">
           {topRow.map((player) => (
             <LocalPlayerArea
@@ -327,13 +323,13 @@ function GameScreen() {
             {turnPhase === "failed" && t("CHALLENGE_FAILED")}
           </Text>
         </HStack>
-        <Button size="sm" colorScheme="gray" onClick={resetGame}>
+        <Button size="sm" colorPalette="gray" onClick={resetGame}>
           {t("RESTART")}
         </Button>
         <Button
           size="sm"
           variant="ghost"
-          colorScheme="gray"
+          colorPalette="gray"
           color="white"
           onClick={() => {
             resetGame();
@@ -350,7 +346,7 @@ function GameScreen() {
         maxW="1200px"
         h="100vh"
         p="16px"
-        spacing="16px"
+        gap="16px"
         justify="space-between"
       >
         {/* Other players area */}
@@ -400,7 +396,7 @@ function GameScreen() {
       />
 
       {/* Big toast message */}
-      <BigToast message={bigToastMessage} />
+      <BigToast message={turnMessage} />
     </Center>
   );
 }

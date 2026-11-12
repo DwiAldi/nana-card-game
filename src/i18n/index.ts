@@ -5,4 +5,6 @@ const t: Translate = (key) => englishTranslation[key];
 
 export const useTranslation = (): { t: Translate } => ({ t });
 
-export default { t };
+const i18n = { t };
+
+export default i18n;

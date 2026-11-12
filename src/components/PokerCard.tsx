@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { motion, useSpring } from "framer-motion";
+import { motion, useSpring, type Transition } from "framer-motion";
 import { Box } from "@chakra-ui/react";
+import Image from "next/image";
 
-const spring = {
+const spring: Transition = {
   type: "spring",
   stiffness: 300,
   damping: 40,
@@ -19,16 +20,21 @@ const CardBody = ({ variant }: { variant: "front" | "back" }) => {
       border="1px solid gray"
       borderRadius="10px"
       overflow="hidden"
+      position="relative"
     >
       {variant === "front" ? (
-        <img
-          style={{ width: "100%", height: "100%" }}
+        <Image
+          fill
+          sizes="182px"
+          style={{ objectFit: "fill" }}
           src="/img/poker-front.png"
           alt="front"
         />
       ) : (
-        <img
-          style={{ width: "100%", height: "100%" }}
+        <Image
+          fill
+          sizes="182px"
+          style={{ objectFit: "fill" }}
           src="/img/poker-back.png"
           alt="back"
         />
@@ -54,11 +60,12 @@ const PokerCard = ({
 
   const [rotateXaxis, setRotateXaxis] = useState(0);
   const [rotateYaxis, setRotateYaxis] = useState(0);
-  const ref = useRef(null);
+  const ref = useRef<HTMLDivElement>(null);
 
-  const handleMouseMove = (event: any) => {
-    const element = ref.current as any;
-    const elementRect = element?.getBoundingClientRect();
+  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    const element = ref.current;
+    if (!element) return;
+    const elementRect = element.getBoundingClientRect();
     const elementWidth = elementRect.width;
     const elementHeight = elementRect.height;
     const elementCenterX = elementWidth / 2;
@@ -82,7 +89,7 @@ const PokerCard = ({
   useEffect(() => {
     dx.set(-rotateXaxis);
     dy.set(rotateYaxis);
-  }, [rotateXaxis, rotateYaxis]);
+  }, [dx, dy, rotateXaxis, rotateYaxis]);
 
   return (
     <motion.div

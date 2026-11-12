@@ -25,7 +25,7 @@ const CardDeck = ({ cards }: { cards: Card[] }) => {
             style={{ position: "absolute" }}
           >
             <NanaCard
-              onClick={(cardId) => {}}
+              onClick={() => {}}
               key={card.id}
               cardId={card.id}
               isRevealed={card.isRevealed}

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useEffectEvent } from "react";
 import { Box, VStack, HStack, Button, Center, Text } from "@chakra-ui/react";
 import { Player } from "@/types";
 import { useGameSound } from "@/lib/use-game-sound";
@@ -30,15 +30,18 @@ const LocalPlayerArea = ({
     player?.hand?.filter((card) => card.isRevealed).length || 0;
   const collectionCount = player?.collection?.length || 0;
 
+  const playRevealSound = useEffectEvent(playWoosh);
+  const playCollectionSound = useEffectEvent(playSuccess);
+
   useEffect(() => {
     if (revealedCount > 0) {
-      playWoosh();
+      playRevealSound();
     }
   }, [revealedCount]);
 
   useEffect(() => {
     if (collectionCount > 0) {
-      playSuccess();
+      playCollectionSound();
     }
   }, [collectionCount]);
 
@@ -69,15 +72,15 @@ const LocalPlayerArea = ({
 
       {/* Hand area with min/max buttons */}
       {player.hand && player.hand.length > 0 && (
-        <HStack w="100%" justify="center" spacing="4px">
+        <HStack w="100%" justify="center" gap="4px">
           <Button
-            colorScheme="gray"
+            colorPalette="gray"
             size="sm"
             h={buttonHeight}
             w="32px"
-            sx={{ writingMode: "vertical-rl" }}
+            writingMode="vertical-rl"
             onClick={() => onRevealCard(player.id, "min")}
-            isDisabled={!isMyTurn}
+            disabled={!isMyTurn}
             opacity={isMyTurn ? 1 : 0.6}
           >
             {t("SELECT_MIN")}
@@ -99,7 +102,7 @@ const LocalPlayerArea = ({
                 maxW={cardWidth}
               >
                 <NanaCard
-                  sx={{
+                  style={{
                     position: "absolute",
                     top: isMe && card.isRevealed ? "-24px" : "0",
                   }}
@@ -114,13 +117,13 @@ const LocalPlayerArea = ({
           </HStack>
 
           <Button
-            colorScheme="gray"
+            colorPalette="gray"
             size="sm"
             h={buttonHeight}
             w="32px"
-            sx={{ writingMode: "vertical-rl" }}
+            writingMode="vertical-rl"
             onClick={() => onRevealCard(player.id, "max")}
-            isDisabled={!isMyTurn}
+            disabled={!isMyTurn}
             opacity={isMyTurn ? 1 : 0.6}
           >
             {t("SELECT_MAX")}

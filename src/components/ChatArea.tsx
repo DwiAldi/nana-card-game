@@ -3,16 +3,13 @@
 import React, { useState } from "react";
 import {
   InputGroup,
-  InputRightElement,
   Input,
-  Button,
   Box,
   Text,
   Icon,
 } from "@chakra-ui/react";
 import { ActionPrefix, Message } from "@/types";
-import { SystemStyleObject } from "@chakra-ui/styled-system";
-import { motion, useAnimate, useSpring } from "framer-motion";
+import { motion, useAnimate } from "framer-motion";
 import {
   RiSendPlaneFill,
   RiArrowDownSFill,
@@ -28,13 +25,11 @@ const toHHSS = (timestamp: number) => {
 };
 
 const ChatArea = ({
-  sx,
   messages,
   act,
 }: {
-  sx?: SystemStyleObject;
   messages: Message[];
-  act: (action: ActionPrefix, data?: any) => void;
+  act: (action: ActionPrefix, data?: unknown) => void;
 }) => {
   const [message, setMessage] = useState<string>("");
   const [isCollapsed, setIsCollapsed] = useState<boolean>(true);
@@ -59,7 +54,6 @@ const ChatArea = ({
         padding="4px"
         border="1px solid white"
         borderRadius="8px"
-        sx={{ ...sx }}
         position="relative"
         bgColor="gray.700"
         paddingBottom="24px"
@@ -90,24 +84,26 @@ const ChatArea = ({
             >{`[${toHHSS(m.timestamp)}] ${m.playerName}: ${m.content}`}</Text>
           ))}
         </Box>
-        <InputGroup size="sm">
+        <InputGroup
+          endElement={
+            <button onClick={sendMessage} aria-label="Send message">
+              <Icon w="16px" h="16px" color="white" as={RiSendPlaneFill} />
+            </button>
+          }
+        >
           <Input
+            size="sm"
             value={message}
-            onChange={(e: any) => setMessage(e.target.value)}
+            onChange={(e) => setMessage(e.target.value)}
             color="white"
             placeholder="send message"
-            onKeyDown={(e: any) => {
+            onKeyDown={(e) => {
               if (e.key === "Enter") {
                 sendMessage();
               }
             }}
             enterKeyHint="send"
           />
-          <InputRightElement>
-            <button onClick={sendMessage}>
-              <Icon w="16px" h="16px" color="white" as={RiSendPlaneFill} />
-            </button>
-          </InputRightElement>
         </InputGroup>
       </Box>
     </motion.div>

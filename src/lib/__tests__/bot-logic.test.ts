@@ -1,8 +1,6 @@
 import { describe, test, expect } from "vitest";
 import { Card, Player } from "@/types";
 import {
-  BotMemory,
-  CardSlot,
   initBotMemory,
   updateMemoryOnReveal,
   updateMemoryOnCollect,
@@ -164,7 +162,7 @@ describe("Memory Update on Reveal", () => {
       publicCards,
       { min: 1, max: 12 }
     );
-    const cardId = memory.otherPlayersHands.get("me")?.cards[0].cardId!;
+    const cardId = memory.otherPlayersHands.get("me")!.cards[0].cardId;
 
     memory = updateMemoryOnReveal(memory, cardId, 2, {
       type: "player",
@@ -273,7 +271,7 @@ describe("Memory Update on Collect", () => {
     );
 
     // Reveal a card first so its value is known.
-    const cardId = memory.otherPlayersHands.get("me")?.cards[0].cardId!;
+    const cardId = memory.otherPlayersHands.get("me")!.cards[0].cardId;
     memory = updateMemoryOnReveal(memory, cardId, 2, {
       type: "player",
       playerId: "me",
@@ -367,7 +365,7 @@ describe("Derived Calculations", () => {
         publicCards,
         { min: 1, max: 12 }
       );
-      const headCardId = memory.otherPlayersHands.get("me")?.cards[0].cardId!;
+      const headCardId = memory.otherPlayersHands.get("me")!.cards[0].cardId;
       memory = updateMemoryOnReveal(memory, headCardId, 2, {
         type: "player",
         playerId: "me",
@@ -384,7 +382,7 @@ describe("Derived Calculations", () => {
         publicCards,
         { min: 1, max: 12 }
       );
-      const meCards = memory.otherPlayersHands.get("me")?.cards!;
+      const meCards = memory.otherPlayersHands.get("me")!.cards;
       const tailCardId = meCards[meCards.length - 1].cardId;
       memory = updateMemoryOnReveal(memory, tailCardId, 8, {
         type: "player",
@@ -523,7 +521,7 @@ describe("Derived Calculations", () => {
         publicCards,
         { min: 1, max: 12 }
       );
-      const headCardId = memory.otherPlayersHands.get("me")?.cards[0].cardId!;
+      const headCardId = memory.otherPlayersHands.get("me")!.cards[0].cardId;
       memory = updateMemoryOnReveal(memory, headCardId, 5, {
         type: "player",
         playerId: "me",
@@ -544,7 +542,7 @@ describe("Derived Calculations", () => {
         publicCards,
         { min: 1, max: 12 }
       );
-      const meCards = memory.otherPlayersHands.get("me")?.cards!;
+      const meCards = memory.otherPlayersHands.get("me")!.cards;
       const tailCardId = meCards[meCards.length - 1].cardId;
       memory = updateMemoryOnReveal(memory, tailCardId, 9, {
         type: "player",
@@ -666,7 +664,7 @@ describe("Probability Calculation", () => {
       publicCards,
       { min: 1, max: 12 }
     );
-    const headCardId = memory.otherPlayersHands.get("me")?.cards[0].cardId!;
+    const headCardId = memory.otherPlayersHands.get("me")!.cards[0].cardId;
     memory = updateMemoryOnReveal(memory, headCardId, 2, {
       type: "player",
       playerId: "me",
@@ -688,7 +686,7 @@ describe("Probability Calculation", () => {
       publicCards,
       { min: 1, max: 12 }
     );
-    const headCardId = memory.otherPlayersHands.get("me")?.cards[0].cardId!;
+    const headCardId = memory.otherPlayersHands.get("me")!.cards[0].cardId;
     memory = updateMemoryOnReveal(memory, headCardId, 2, {
       type: "player",
       playerId: "me",
@@ -729,7 +727,7 @@ describe("Probability Calculation", () => {
       { min: 1, max: 12 }
     );
     // me's head is 5, so its hand cannot contain 1 through 4.
-    const headCardId = memory.otherPlayersHands.get("me")?.cards[0].cardId!;
+    const headCardId = memory.otherPlayersHands.get("me")!.cards[0].cardId;
     memory = updateMemoryOnReveal(memory, headCardId, 5, {
       type: "player",
       playerId: "me",
@@ -838,8 +836,8 @@ describe("Bot Decision Making", () => {
       );
 
       // Set me's head to 4 and bot-2's head to 4.
-      const meHeadId = memory.otherPlayersHands.get("me")?.cards[0].cardId!;
-      const bot2HeadId = memory.otherPlayersHands.get("bot-2")?.cards[0].cardId!;
+      const meHeadId = memory.otherPlayersHands.get("me")!.cards[0].cardId;
+      const bot2HeadId = memory.otherPlayersHands.get("bot-2")!.cards[0].cardId;
       memory = updateMemoryOnReveal(memory, meHeadId, 4, {
         type: "player",
         playerId: "me",
@@ -873,7 +871,7 @@ describe("Bot Decision Making", () => {
       );
 
       // me's head is known to be 6.
-      const meHeadId = memory.otherPlayersHands.get("me")?.cards[0].cardId!;
+      const meHeadId = memory.otherPlayersHands.get("me")!.cards[0].cardId;
       memory = updateMemoryOnReveal(memory, meHeadId, 6, {
         type: "player",
         playerId: "me",
@@ -981,7 +979,7 @@ describe("Bot Decision Making", () => {
       );
 
       // me's head is known to be 2.
-      const meHeadId = memory.otherPlayersHands.get("me")?.cards[0].cardId!;
+      const meHeadId = memory.otherPlayersHands.get("me")!.cards[0].cardId;
       memory = updateMemoryOnReveal(memory, meHeadId, 2, {
         type: "player",
         playerId: "me",
@@ -1089,7 +1087,7 @@ describe("Edge Cases", () => {
     );
 
     // Reveal me's head card as 2.
-    const meHeadId = memory.otherPlayersHands.get("me")?.cards[0].cardId!;
+    const meHeadId = memory.otherPlayersHands.get("me")!.cards[0].cardId;
     memory = updateMemoryOnReveal(memory, meHeadId, 2, {
       type: "player",
       playerId: "me",

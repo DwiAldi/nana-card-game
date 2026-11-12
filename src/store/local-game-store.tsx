@@ -18,16 +18,12 @@ import {
 enableMapSet();
 
 import {
-  allRevealedCards,
   challengeFailed,
   challengeSuccess,
-  concealAllCards,
   findUnrevealedCardId,
-  getCurrentAndNextPlayer,
   isPlayerWin,
   removeTargetCards,
   sortByIdAsc,
-  sortByIdDesc,
 } from "@/lib/game-helper";
 
 export type LocalGameStage = "config" | "dealing" | "in-game" | "game-over";
@@ -366,7 +362,7 @@ export const useLocalGameStore = create<LocalGameState & LocalGameActions>()(
                 {
                   players: draft.players,
                   publicCards: draft.publicCards,
-                } as any,
+                },
                 collectedNumber
               );
 

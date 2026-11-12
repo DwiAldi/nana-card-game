@@ -13,23 +13,20 @@ const HandArea = ({
   isMe: boolean;
   cards: Card[] | undefined;
 }) => {
-  let { toastError, toastInfo, toastOk } = useGameToast();
+  const { toastInfo } = useGameToast();
 
   return (
     <HStack h="136px" w="-webkit-fill-available" padding="8px">
       {cards?.map((card) => (
         <Box
           key={card.id}
-          sx={{
-            height: "100%",
-            width: "100%",
-            maxWidth: "90px",
-            position: "relative",
-            // border: "1px solid white",
-          }}
+          height="100%"
+          width="100%"
+          maxWidth="90px"
+          position="relative"
         >
           <NanaCard
-            sx={{
+            style={{
               position: "absolute",
               top: isMe && card.isRevealed ? "-32px" : "0",
             }}
@@ -41,13 +38,7 @@ const HandArea = ({
           />
         </Box>
       ))}
-      <Box
-        sx={{
-          height: "100%",
-          width: "50%",
-          // border: "1px solid white",
-        }}
-      ></Box>
+      <Box height="100%" width="50%" />
     </HStack>
   );
 };

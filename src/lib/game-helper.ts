@@ -13,7 +13,7 @@ export const allRevealedCards = (serverState: ServerState) => {
 };
 
 export const isTurnOver = (serverState: ServerState): boolean => {
-  let revealedCards = allRevealedCards(serverState);
+  const revealedCards = allRevealedCards(serverState);
   if (revealedCards.length === 2) {
     return revealedCards[0].number !== revealedCards[1].number;
   }
@@ -99,7 +99,7 @@ export const concealAllCards = (serverState: ServerState) => {
 };
 
 export const removeTargetCards = (
-  serverState: ServerState,
+  serverState: Pick<ServerState, "players" | "publicCards">,
   targetCardNumber: number,
 ) => {
   serverState.players.forEach(
@@ -109,7 +109,11 @@ export const removeTargetCards = (
   if (serverState.publicCards) {
     for (let i = 0; i < serverState.publicCards.length; i++) {
       if (serverState.publicCards[i].number === targetCardNumber) {
-        (serverState.publicCards[i] as any) = { id: undefined };
+        serverState.publicCards[i] = {
+          id: "",
+          number: targetCardNumber,
+          isRevealed: false,
+        };
       }
     }
   }
@@ -124,7 +128,7 @@ export const calculateDisplayPlayerIndices = (
     return [];
   }
 
-  let originIndex = [];
+  const originIndex = [];
 
   for (let i = 0; i < players.length; i++) {
     originIndex.push(i);

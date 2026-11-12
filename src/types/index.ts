@@ -34,7 +34,14 @@ export interface Action {
   gameId: string;
   playerId: string;
   action: ActionPrefix;
-  data?: any;
+  data: {
+    playerId: string;
+    playerName: string;
+    cardId: string;
+    targetPlayerId: string;
+    minMax: "min" | "max";
+    message: string;
+  };
 }
 
 export interface LocalPlayerInfo {

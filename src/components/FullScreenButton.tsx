@@ -9,7 +9,7 @@ const FullScreenButton = () => {
     <IconButton
       variant="outline"
       color="white"
-      colorScheme="none"
+      colorPalette="gray"
       aria-label="Fullscreen"
       size="sm"
       fontSize="20px"
@@ -20,8 +20,9 @@ const FullScreenButton = () => {
           document.body.requestFullscreen();
         }
       }}
-      icon={<RiFullscreenFill />}
-    />
+    >
+      <RiFullscreenFill />
+    </IconButton>
   );
 };
 

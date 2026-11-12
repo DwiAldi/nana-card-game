@@ -4,7 +4,6 @@ import { Card } from "@/types";
 import { Box, HStack, Text } from "@chakra-ui/react";
 import { motion } from "framer-motion";
 import NanaCard from "@/components/NanaCard";
-import React, { useEffect } from "react";
 
 const CollectionArea = ({ cards }: { cards: Card[] }) => {
   const groupedCards = cards.reduce(
@@ -19,13 +18,7 @@ const CollectionArea = ({ cards }: { cards: Card[] }) => {
   );
 
   return (
-    <HStack
-      sx={{
-        // border: "1px solid white",
-        width: "220px",
-        height: "-webkit-fill-available",
-      }}
-    >
+    <HStack width="220px" height="-webkit-fill-available">
       {cards.length > 0 && <Text color="white">Collected:</Text>}
       {Object.keys(groupedCards).map((key) => (
         <Box h="64px" w="45px" key={key}>

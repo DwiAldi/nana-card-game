@@ -9,9 +9,9 @@ interface SettingState {
   _hasHydrated: boolean;
 }
 interface SettingAction {
-  toggleSoundEnabled: any;
-  setPlayerId: any;
-  setPlayerName: any;
+  toggleSoundEnabled: () => void;
+  setPlayerId: (playerId: string) => void;
+  setPlayerName: (playerName: string) => void;
 }
 
 export const useGameSettingsStore = create<SettingState & SettingAction>()(
@@ -28,7 +28,7 @@ export const useGameSettingsStore = create<SettingState & SettingAction>()(
     }),
     {
       name: "game-settings", // name of the item in the storage (must be unique)
-      storage: createJSONStorage(() => localStorage), // (optional) by default, 'localStorage' is used
+      storage: createJSONStorage(() => window.localStorage),
       version: 1,
       // Keep only supported preferences when migrating older saved settings.
       migrate: (persistedState) => {

@@ -1,10 +1,9 @@
 "use client";
-// @ts-ignore
 import useSound from "use-sound";
 import { useGameSettingsStore } from "@/store/setting-store";
 
 export const useGameSound = () => {
-  let { soundEnabled } = useGameSettingsStore();
+  const { soundEnabled } = useGameSettingsStore();
 
   const soundOption = { soundEnabled: soundEnabled };
 

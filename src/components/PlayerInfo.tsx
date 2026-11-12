@@ -13,10 +13,10 @@ const PlayerInfo = ({
 }) => {
   return (
     <HStack width="200px" gap="4">
-      <Avatar
-        bg={player?.isPlaying ? "green.500" : "gray.500"}
-        src={player?.isWinner ? "/img/player/winner.png" : ""}
-      />
+      <Avatar.Root bg={player?.isPlaying ? "green.500" : "gray.500"}>
+        <Avatar.Fallback name={player?.name ?? `Player ${seatNumber}`} />
+        {player?.isWinner && <Avatar.Image src="/img/player/winner.png" />}
+      </Avatar.Root>
       <Box>
         <Heading color="white" size="sm">
           Player {seatNumber} {player?.isPlaying && " - Playing"}{" "}

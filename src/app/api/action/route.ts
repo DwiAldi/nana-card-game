@@ -1,18 +1,14 @@
 import { getRedis } from "@/lib/redis";
 import { shuffle } from "@/lib/random";
 import {
-  allRevealedCards,
-  challengeFailed,
-  challengeSuccess,
-  concealAllCards,
   findUnrevealedCardId,
   getCurrentAndNextPlayer,
   isTurnOver,
-  removeTargetCards,
   sortByIdAsc,
 } from "@/lib/game-helper";
-import { Action, Card, Player, ServerState } from "@/types";
+import { Action, Card, ServerState } from "@/types";
 import { ALL_CARDS, GAME_RULES } from "@/lib/rules";
+import { getServerState, replaceState } from "@/lib/server-game-state";
 
 export async function POST(request: Request) {
   try {
@@ -60,7 +56,7 @@ export async function POST(request: Request) {
       }
       if (serverState.players.some((p) => p.id === action.playerId)) {
         // player is already in the room
-        return serverState;
+        return Response.json(serverState);
       }
       serverState.players.push({
         id: action.playerId,
@@ -83,7 +79,7 @@ export async function POST(request: Request) {
       const gameRule = GAME_RULES[playerNumber];
       console.log(gameRule);
 
-      let shuffled: Card[] = shuffle([...gameRule.cards]);
+      const shuffled: Card[] = shuffle([...gameRule.cards]);
 
       Object.assign<ServerState, Partial<ServerState>>(serverState, {
         gameStage: "stage:in-game",
@@ -140,7 +136,7 @@ export async function POST(request: Request) {
       const targetPlayer = serverState.players.find(
         (p) => p.id === action.data.targetPlayerId,
       );
-      let unrevealedCardId = findUnrevealedCardId(
+      const unrevealedCardId = findUnrevealedCardId(
         targetPlayer?.hand,
         action.data.minMax,
       );
@@ -151,6 +147,7 @@ export async function POST(request: Request) {
       const unrevealedCard = targetPlayer?.hand.find(
         (c) => c.id === unrevealedCardId,
       );
+      if (!unrevealedCard) throw new Error("no more card");
       unrevealedCard.isRevealed = true;
 
       if (isTurnOver(serverState)) {
@@ -163,8 +160,9 @@ export async function POST(request: Request) {
 
     if (action.action === "action:chat") {
       const me = serverState.players.find((p) => p.id === action.playerId);
+      if (!me) throw new Error("player not found");
       serverState.messages.unshift({
-        playerName: me?.name,
+        playerName: me.name,
         content: action.data.message,
         timestamp: Date.now(),
       });
@@ -173,67 +171,11 @@ export async function POST(request: Request) {
     await replaceState(action.gameId, serverState);
 
     return Response.json(serverState);
-  } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 400 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return Response.json({ error: message }, { status: 400 });
   }
 }
-
-const getServerState = async (gameId: string) => {
-  const redis = await getRedis();
-  const data = await redis.get(`game:${gameId}`);
-  if (!data) {
-    throw new Error(`No game found for gameId: ${gameId}`);
-  }
-  return JSON.parse(data) as ServerState;
-};
-
-export async function replaceState(gameId: string, serverState: ServerState) {
-  const redis = await getRedis();
-  await redis.set(`game:${gameId}`, JSON.stringify(serverState));
-}
-
-export const setGameOver = async (
-  gameId: string,
-  serverState: ServerState,
-  winnerId: string,
-) => {
-  Object.assign<ServerState, Partial<ServerState>>(serverState, {
-    gameStage: "stage:game-over",
-    gameSubStage: null,
-    timestamp: Date.now(),
-  });
-  serverState.players.forEach((p) => {
-    p.isPlaying = false;
-    if (winnerId === p.id) p.isWinner = true;
-  });
-
-  await replaceState(gameId, serverState);
-};
-
-export const settleAndNextRound = async (
-  gameId: string,
-  serverState: ServerState,
-) => {
-  const revealedCards = allRevealedCards(serverState);
-  let [currentPlayer, nextPlayer] = getCurrentAndNextPlayer(
-    serverState.players,
-  );
-  if (challengeFailed(revealedCards)) {
-    // do nothing
-  } else if (challengeSuccess(revealedCards)) {
-    removeTargetCards(serverState, revealedCards[0].number);
-    currentPlayer.collection = [...currentPlayer.collection, ...revealedCards];
-  }
-
-  currentPlayer.isPlaying = false;
-  nextPlayer.isPlaying = true;
-
-  serverState.gameSubStage = "sub:playing";
-  serverState.timestamp = Date.now();
-  concealAllCards(serverState);
-
-  await replaceState(gameId, serverState);
-};
 
 export const runtime = "nodejs";
 export const fetchCache = "force-no-store";

@@ -1,24 +1,25 @@
 "use client";
-import { Box, useToast } from "@chakra-ui/react";
+import { Box } from "@chakra-ui/react";
 import React from "react";
 import { useRequest } from "ahooks";
 import GameMain from "@/components/GameMain";
 import { ActionPrefix, ServerState } from "@/types";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import GameRuleButton from "@/components/GameRuleButton";
 import FullScreenButton from "@/components/FullScreenButton";
 import VolumeButton from "@/components/VolumeButton";
 import { useGameSettingsStore } from "@/store/setting-store";
+import { toaster } from "@/components/ui/toaster";
 
-const GameRoomPage = ({ params }: { params: { id: string } }) => {
+const GameRoomPage = () => {
   const router = useRouter();
-  const toast = useToast();
+  const { id } = useParams<{ id: string }>();
 
-  const { playerId, playerName } = useGameSettingsStore();
+  const { playerId } = useGameSettingsStore();
 
   const gameStateFetcher = async (): Promise<ServerState> => {
     const res = await fetch(
-      `/api/game-state?id=${params.id}&playerId=${playerId}`,
+      `/api/game-state?id=${id}&playerId=${playerId}`,
       {
         cache: "no-cache",
       },
@@ -37,13 +38,12 @@ const GameRoomPage = ({ params }: { params: { id: string } }) => {
   } = useRequest(gameStateFetcher, {
     pollingInterval: 1000,
     onError: (error) => {
-      toast({
+      toaster.create({
         title: "Unable to load the room",
         description: error.message,
-        status: "error",
+        type: "error",
         duration: 6000,
-        isClosable: true,
-        position: "top-right",
+        closable: true,
       });
       router.push("/");
     },
@@ -51,7 +51,7 @@ const GameRoomPage = ({ params }: { params: { id: string } }) => {
 
   const actionExecutor = async (
     actionType: ActionPrefix,
-    data?: any,
+    data?: unknown,
   ): Promise<ServerState> => {
     if (actLoading) {
       console.log("Action is currently loading, skipping fetch.");
@@ -60,7 +60,7 @@ const GameRoomPage = ({ params }: { params: { id: string } }) => {
     const res = await fetch("/api/action", {
       method: "POST",
       body: JSON.stringify({
-        gameId: params.id,
+        gameId: id,
         playerId: playerId,
         action: actionType,
         data: data,
@@ -75,25 +75,23 @@ const GameRoomPage = ({ params }: { params: { id: string } }) => {
 
   const { run: act, loading: actLoading } = useRequest(actionExecutor, {
     manual: true,
-    onSuccess: (result, params) => {
+    onSuccess: (result) => {
       mutateServerState(result);
-      toast({
+      toaster.create({
         title: `Action completed`,
         // description: `${JSON.stringify(params)}`,
-        status: "success",
+        type: "success",
         duration: 2000,
-        isClosable: true,
-        position: "top-right",
+        closable: true,
       });
     },
     onError: (error) => {
-      toast({
+      toaster.create({
         title: `Action failed`,
         description: error.message,
-        status: "error",
+        type: "error",
         duration: 2000,
-        isClosable: true,
-        position: "top-right",
+        closable: true,
       });
     },
   });
@@ -103,14 +101,12 @@ const GameRoomPage = ({ params }: { params: { id: string } }) => {
       {serverState && <GameMain serverState={serverState} act={act} />}
 
       <Box
-        sx={{
-          position: "fixed",
-          top: "16px",
-          left: "16px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "8px",
-        }}
+        position="fixed"
+        top="16px"
+        left="16px"
+        display="flex"
+        flexDirection="column"
+        gap="8px"
       >
         <FullScreenButton />
         <VolumeButton />

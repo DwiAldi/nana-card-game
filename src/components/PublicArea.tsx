@@ -1,26 +1,24 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useEffectEvent } from "react";
 import NanaCard from "@/components/NanaCard";
 import { HStack, Box } from "@chakra-ui/react";
-import { SystemStyleObject } from "@chakra-ui/styled-system";
-import { ActionPrefix, Card, Player } from "@/types";
+import { ActionPrefix, Card } from "@/types";
 import { useGameSound } from "@/lib/use-game-sound";
 
 const PublicArea = ({
-  sx,
   cards,
   act,
 }: {
-  sx?: SystemStyleObject;
   cards: Card[];
-  act: (action: ActionPrefix, data?: any) => void;
+  act: (action: ActionPrefix, data?: unknown) => void;
 }) => {
   const { playWoosh } = useGameSound();
   const revealedCount = cards.filter((card) => card.isRevealed).length;
+  const playRevealSound = useEffectEvent(playWoosh);
 
   useEffect(() => {
-    revealedCount && revealedCount > 0 && playWoosh();
+    if (revealedCount && revealedCount > 0) playRevealSound();
   }, [revealedCount]);
 
   return (
@@ -28,7 +26,7 @@ const PublicArea = ({
       {cards.map((card, i) =>
         card.id ? (
           <NanaCard
-            onClick={(cardId) =>
+            onClick={() =>
               act("action:reveal-public-card", { cardId: card.id })
             }
             key={card.id}
