@@ -4,9 +4,9 @@ import React from "react";
 import { motion } from "framer-motion";
 import NanaCard from "@/components/NanaCard";
 import { Center } from "@chakra-ui/react";
-import { PublicCard } from "@/types";
+import { DisplayCard } from "@/types";
 
-const CardDeck = ({ cards }: { cards: PublicCard[] }) => {
+const CardDeck = ({ cards }: { cards: DisplayCard[] }) => {
   return (
     <Center
       w="140px"

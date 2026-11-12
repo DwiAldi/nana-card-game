@@ -26,7 +26,9 @@ const PlayerArea = ({
   disabled?: boolean;
 }) => {
   const { playWoosh, playSuccess } = useGameSound();
-  const revealedCount = player?.hand.filter((card) => card.isRevealed).length;
+  // Every card in the viewer's own hand is visible in their private
+  // projection. Only opponent/table reveals should drive the reveal sound.
+  const revealedCount = isMe ? 0 : player?.hand.filter((card) => card.isRevealed).length;
   const collectionCount = player?.collection?.length;
   const playRevealSound = useEffectEvent(playWoosh);
   const playCollectionSound = useEffectEvent(playSuccess);

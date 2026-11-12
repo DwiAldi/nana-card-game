@@ -3,7 +3,7 @@
 import React from "react";
 import NanaCard from "@/components/NanaCard";
 import { Box, HStack } from "@chakra-ui/react";
-import { PublicCard } from "@/types";
+import { DisplayCard } from "@/types";
 import { useGameToast } from "@/lib/use-game-toast";
 
 const HandArea = ({
@@ -11,7 +11,7 @@ const HandArea = ({
   cards,
 }: {
   isMe: boolean;
-  cards: PublicCard[] | undefined;
+  cards: DisplayCard[] | undefined;
 }) => {
   const { toastInfo } = useGameToast();
 
@@ -28,12 +28,12 @@ const HandArea = ({
           <NanaCard
             style={{
               position: "absolute",
-              top: isMe && card.isRevealed ? "-32px" : "0",
+              top: !isMe && card.isRevealed ? "-32px" : "0",
             }}
             onClick={() => toastInfo("You can only select a player's lowest or highest card")}
             cardId={card.id}
             number={card.number}
-            isRevealed={card.number !== undefined}
+            isRevealed={card.isRevealed}
             w="90px"
             h="120px"
           />

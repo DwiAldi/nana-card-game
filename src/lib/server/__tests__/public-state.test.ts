@@ -135,8 +135,8 @@ describe("toPublicState", () => {
     const publicState = toPublicState(fixtureState(), P1);
     const me = publicState.players.find((p) => p.id === P1)!;
     expect(me.hand).toEqual([
-      { id: "opaque-h1", isRevealed: false, number: 5 },
-      { id: "7-a", isRevealed: false, number: 7 },
+      { id: "opaque-h1", isRevealed: true, number: 5 },
+      { id: "7-a", isRevealed: true, number: 7 },
       { id: "opaque-r1", isRevealed: true, number: 9 },
     ]);
   });
@@ -345,7 +345,7 @@ describe("toPublicState", () => {
     const owner = asOwner.players.find((p) => p.id === P2)!;
     expect(owner.hand).toHaveLength(8);
     for (const handCard of owner.hand) {
-      expect(handCard.isRevealed).toBe(false);
+      expect(handCard.isRevealed).toBe(true);
       expect(Number.isFinite(cardNumber(handCard))).toBe(true);
     }
 

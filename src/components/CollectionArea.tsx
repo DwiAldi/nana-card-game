@@ -1,11 +1,11 @@
 "use client";
 
-import { PublicCard } from "@/types";
+import { DisplayCard } from "@/types";
 import { Box, HStack, Text } from "@chakra-ui/react";
 import { motion } from "framer-motion";
 import NanaCard from "@/components/NanaCard";
 
-const CollectionArea = ({ cards }: { cards: PublicCard[] }) => {
+const CollectionArea = ({ cards }: { cards: DisplayCard[] }) => {
   const groupedCards = cards.reduce(
     (acc, card) => {
       if (card.number === undefined) return acc;
@@ -15,7 +15,7 @@ const CollectionArea = ({ cards }: { cards: PublicCard[] }) => {
       acc[card.number].push(card);
       return acc;
     },
-    {} as { [key: string]: PublicCard[] },
+    {} as { [key: string]: DisplayCard[] },
   );
 
   return (

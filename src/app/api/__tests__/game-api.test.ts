@@ -6,6 +6,7 @@ import type { RateLimiter, RateLimitRequest, RateLimitResult } from "@/lib/serve
 import {
   InMemorySessionStore,
   issueSession,
+  type SessionRecord,
   type ServerConfig,
   type SessionStore,
 } from "@/lib/server/session";
@@ -69,6 +70,21 @@ class TestLimiter implements RateLimiter {
   }
 }
 
+class TrackingSessionStore extends InMemorySessionStore {
+  puts = 0;
+  deletes = 0;
+
+  override async put(digest: string, record: SessionRecord, ttlSeconds: number) {
+    this.puts += 1;
+    await super.put(digest, record, ttlSeconds);
+  }
+
+  override async delete(digest: string) {
+    this.deletes += 1;
+    await super.delete(digest);
+  }
+}
+
 const post = (body: unknown, headers: Record<string, string> = {}) =>
   new Request(`${ORIGIN}/api/action`, {
     method: "POST",
@@ -76,9 +92,13 @@ const post = (body: unknown, headers: Record<string, string> = {}) =>
     body: typeof body === "string" ? body : JSON.stringify(body),
   });
 
-async function fixture(overrides: { config?: ServerConfig; repository?: MemoryRepository } = {}) {
+async function fixture(overrides: {
+  config?: ServerConfig;
+  repository?: MemoryRepository;
+  sessions?: SessionStore;
+} = {}) {
   const repository = overrides.repository ?? new MemoryRepository();
-  const sessions = new InMemorySessionStore();
+  const sessions = overrides.sessions ?? new InMemorySessionStore();
   const limiter = new TestLimiter();
   const api = createGameApi({
     config: overrides.config ?? config,
@@ -169,6 +189,53 @@ describe("secure game API", () => {
     const production = await fixture({ config: { ...config, nodeEnv: "production" } });
     const prodResponse = await production.api.action(post({ action: "host", name: "Host" }));
     expect(prodResponse.headers.get("set-cookie")).toContain("Secure");
+  });
+
+  it("applies the global bootstrap limit before creating an unauthenticated join session", async () => {
+    const sessions = new TrackingSessionStore();
+    const { api, limiter } = await fixture({ sessions });
+    limiter.result = {
+      allowed: false,
+      limit: 60,
+      remaining: 0,
+      retryAfterSeconds: 9,
+      resetSeconds: 9,
+    };
+
+    const response = await api.action(post({ action: "join", roomId: ROOM, name: "Guest" }));
+
+    expect(response.status).toBe(429);
+    expect(limiter.requests).toHaveLength(1);
+    expect(limiter.requests[0].kind).toBe("create");
+    expect(sessions.puts).toBe(0);
+  });
+
+  it("does not apply the bootstrap limit when a valid session joins", async () => {
+    const { api, repository, sessions, limiter } = await fixture();
+    repository.state = createGameState(ROOM, P1, "Host", 1000);
+    const cookie = await authenticated(sessions, P2);
+    limiter.requests = [];
+
+    const response = await api.action(post(
+      { action: "join", roomId: ROOM, name: "Guest" },
+      { cookie },
+    ));
+
+    expect(response.status).toBe(200);
+    expect(limiter.requests.map((request) => request.kind)).toEqual(["join"]);
+  });
+
+  it("deletes a newly issued join session when the join fails", async () => {
+    const sessions = new TrackingSessionStore();
+    const repository = new MemoryRepository();
+    repository.failure = new Error("storage unavailable");
+    const { api } = await fixture({ sessions, repository });
+
+    const response = await api.action(post({ action: "join", roomId: ROOM, name: "Guest" }));
+
+    expect(response.status).toBe(503);
+    expect(sessions.puts).toBe(1);
+    expect(sessions.deletes).toBe(1);
   });
 
   it("returns a sanitized viewer projection for repeated joins and polls", async () => {

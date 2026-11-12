@@ -10,6 +10,7 @@ import {
   resolveSession,
   reuseOrCreateSession,
   sessionCookie,
+  hashSessionToken,
   type ServerConfig,
   type SessionStore,
 } from "./session";
@@ -65,6 +66,11 @@ export function createGameApi(deps: GameApiDependencies): GameApi {
     return session;
   }
 
+  async function discardNewSession(token: string, wasExisting: boolean): Promise<void> {
+    if (wasExisting) return;
+    await deps.sessions.delete(hashSessionToken(token)).catch(() => undefined);
+  }
+
   async function action(request: Request): Promise<Response> {
     try {
       checkMutationOrigin(request, deps.config);
@@ -76,28 +82,51 @@ export function createGameApi(deps: GameApiDependencies): GameApi {
         const creationLimit = await checkLimit("create", null, clientIp);
         if (creationLimit) return creationLimit;
 
+        const existing = await resolveSession(deps.sessions, token);
         const session = await reuseOrCreateSession(deps.sessions, deps.config, token, now);
-        const hostLimit = await checkLimit("host", session.playerId);
-        if (hostLimit) return hostLimit;
-        const state = await deps.repository.createGame({
-          hostPlayerId: session.playerId,
-          hostName: input.name,
-        });
-        return jsonWithHeaders(toPublicState(state, session.playerId), 200, {
-          "set-cookie": sessionCookie(deps.config, session.token),
-        });
+        try {
+          const hostLimit = await checkLimit("host", session.playerId);
+          if (hostLimit) {
+            await discardNewSession(session.token, existing !== null);
+            return hostLimit;
+          }
+          const state = await deps.repository.createGame({
+            hostPlayerId: session.playerId,
+            hostName: input.name,
+          });
+          return jsonWithHeaders(toPublicState(state, session.playerId), 200, {
+            "set-cookie": sessionCookie(deps.config, session.token),
+          });
+        } catch (error: unknown) {
+          await discardNewSession(session.token, existing !== null);
+          throw error;
+        }
       }
 
       if (input.action === "join") {
+        const existing = await resolveSession(deps.sessions, token);
+        if (!existing) {
+          const clientIp = readTrustedClientIp(request.headers, { trustedProxyHops });
+          const bootstrapLimit = await checkLimit("create", null, clientIp);
+          if (bootstrapLimit) return bootstrapLimit;
+        }
         const session = await reuseOrCreateSession(deps.sessions, deps.config, token, now);
-        const joinLimit = await checkLimit("join", session.playerId);
-        if (joinLimit) return joinLimit;
-        const state = await deps.repository.updateGame(input.roomId, (current) =>
-          applyGameAction(current, { type: "join", name: input.name }, session.playerId, now()),
-        );
-        return jsonWithHeaders(toPublicState(state, session.playerId), 200, {
-          "set-cookie": sessionCookie(deps.config, session.token),
-        });
+        try {
+          const joinLimit = await checkLimit("join", session.playerId);
+          if (joinLimit) {
+            await discardNewSession(session.token, existing !== null);
+            return joinLimit;
+          }
+          const state = await deps.repository.updateGame(input.roomId, (current) =>
+            applyGameAction(current, { type: "join", name: input.name }, session.playerId, now()),
+          );
+          return jsonWithHeaders(toPublicState(state, session.playerId), 200, {
+            "set-cookie": sessionCookie(deps.config, session.token),
+          });
+        } catch (error: unknown) {
+          await discardNewSession(session.token, existing !== null);
+          throw error;
+        }
       }
 
       const session = await requireSession(request);

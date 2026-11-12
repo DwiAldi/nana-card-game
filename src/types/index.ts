@@ -40,11 +40,14 @@ export interface Card {
  * cards carry their number (the owner may always see their own cards),
  * while every other player's hidden cards stay numberless.
  */
-export interface PublicCard {
+export type PublicCard =
+  | { id: string; isRevealed: false; number?: never }
+  | { id: string; isRevealed: true; number: number };
+
+/** Card fields required by shared local/network rendering components. */
+export interface DisplayCard {
   id: string;
-  /** Whether opponents/table viewers can see this card. */
   isRevealed: boolean;
-  /** Present for publicly revealed cards and for the viewer's own hand only. */
   number?: number;
 }
 
