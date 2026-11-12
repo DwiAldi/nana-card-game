@@ -138,7 +138,7 @@ const GamePage = () => {
               size="sm"
               fontSize="20px"
               onClick={() =>
-                window.open("https://github.com/Cyronlee/nana-card-game")
+                window.open("https://github.com/DwiAldi/nana-card-game")
               }
               icon={<BsGithub />}
             />

@@ -51,7 +51,7 @@ const GameRuleButton = () => {
                 1. If you reveal a different number, the challenge fails and play passes to the next player.
               </Text>
               <Text>
-                2. If you reveal three matching numbers in a row, collect the set. In online play, play passes to the next player; in single-player mode, you continue your turn.
+                2. If you reveal three matching numbers in a row, the challenge succeeds and play passes to the next player.
               </Text>
               <Text>You win when you meet any of these conditions:</Text>
               <Text>1. Collect three sets.</Text>
