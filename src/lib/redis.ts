@@ -77,6 +77,8 @@ function attachErrorListener(client: RedisClientType): void {
 interface RedisGlobals {
   baseClient?: RedisClientType | null;
   connectPromise?: Promise<RedisClientType> | null;
+  terminalClients?: WeakSet<RedisClientType>;
+  reconnectWaiters?: WeakMap<RedisClientType, Set<() => void>>;
 }
 
 /**
@@ -84,6 +86,16 @@ interface RedisGlobals {
  * leak a socket per reload.
  */
 const globalForRedis = globalThis as unknown as RedisGlobals;
+globalForRedis.terminalClients ??= new WeakSet<RedisClientType>();
+globalForRedis.reconnectWaiters ??= new WeakMap<RedisClientType, Set<() => void>>();
+
+function markTerminal(client: RedisClientType): void {
+  globalForRedis.terminalClients?.add(client);
+  const waiters = globalForRedis.reconnectWaiters?.get(client);
+  if (!waiters) return;
+  for (const notify of waiters) notify();
+  waiters.clear();
+}
 
 /**
  * Reads the configured Redis URL.
@@ -111,13 +123,16 @@ function getBaseClient(): RedisClientType {
     url: requireRedisUrl(),
     socket: {
       connectTimeout: REDIS_CONNECT_TIMEOUT_MS,
-      reconnectStrategy: (retries: number) =>
-        retries >= REDIS_MAX_RECONNECT_ATTEMPTS
-          ? false
-          : Math.min(
-              REDIS_RECONNECT_BASE_DELAY_MS * 2 ** retries,
-              REDIS_RECONNECT_MAX_DELAY_MS,
-            ),
+      reconnectStrategy: (retries: number) => {
+        if (retries >= REDIS_MAX_RECONNECT_ATTEMPTS) {
+          markTerminal(client);
+          return false;
+        }
+        return Math.min(
+          REDIS_RECONNECT_BASE_DELAY_MS * 2 ** retries,
+          REDIS_RECONNECT_MAX_DELAY_MS,
+        );
+      },
     },
     commandOptions: { timeout: REDIS_COMMAND_TIMEOUT_MS },
   });
@@ -134,19 +149,49 @@ function getBaseClient(): RedisClientType {
  * sockets.
  */
 export async function getRedis(): Promise<RedisClientType> {
-  const client = getBaseClient();
+  let client = getBaseClient();
   if (client.isReady) return client;
 
+  if (!client.isOpen || globalForRedis.terminalClients?.has(client)) {
+    if (globalForRedis.baseClient === client) globalForRedis.baseClient = null;
+    try {
+      client.destroy();
+    } catch {
+      // A terminal client may already have released its socket.
+    }
+    client = getBaseClient();
+  }
+
   if (!globalForRedis.connectPromise) {
-    const attempt = client
-      .connect()
+    const waitForConnection = client.isOpen
+      ? new Promise<void>((resolve, reject) => {
+          const onReady = () => {
+            cleanup();
+            resolve();
+          };
+          const onTerminal = () => {
+            cleanup();
+            reject(new Error("Redis reconnect attempts exhausted"));
+          };
+          const cleanup = () => {
+            client.off("ready", onReady);
+            globalForRedis.reconnectWaiters?.get(client)?.delete(onTerminal);
+          };
+          client.once("ready", onReady);
+          let waiters = globalForRedis.reconnectWaiters?.get(client);
+          if (!waiters) {
+            waiters = new Set();
+            globalForRedis.reconnectWaiters?.set(client, waiters);
+          }
+          waiters.add(onTerminal);
+          if (globalForRedis.terminalClients?.has(client)) onTerminal();
+        })
+      : client.connect();
+    const attempt = waitForConnection
       .then(() => client)
       .catch((error: unknown) => {
         console.error("[redis] connection failed:", redactRedisText(describeError(error)));
-        globalForRedis.connectPromise = null;
         if (globalForRedis.baseClient === client) {
-          // The client is unusable after a failed handshake; drop it so the
-          // next call starts from a fresh one.
           globalForRedis.baseClient = null;
         }
         try {
@@ -155,6 +200,11 @@ export async function getRedis(): Promise<RedisClientType> {
           // The connection never opened; nothing to clean up.
         }
         throw new RedisUnavailableError();
+      })
+      .finally(() => {
+        if (globalForRedis.connectPromise === attempt) {
+          globalForRedis.connectPromise = null;
+        }
       });
     globalForRedis.connectPromise = attempt;
   }

@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import { WatchError } from "redis";
-import type { ServerState } from "@/types";
+import type { Card, Message, Player, ServerState } from "@/types";
 import { getRedis, createIsolatedConnection } from "@/lib/redis";
 import {
   ConflictError,
@@ -62,6 +62,7 @@ export const MAX_UPDATE_ATTEMPTS = MAX_UPDATE_RETRIES + 1;
 export const ROOM_ID_LENGTH = 10;
 
 const ROOM_ID_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
+const KEY_PREFIX_PATTERN = /^[A-Za-z0-9:_-]{0,128}$/;
 
 /**
  * Mints a cryptographically random room id.
@@ -153,7 +154,9 @@ function canonicalJson(value: unknown): string {
 
 function parseState(raw: string): ServerState {
   try {
-    return JSON.parse(raw) as ServerState;
+    const state = normalizeGameState(JSON.parse(raw) as unknown);
+    if (!state) throw new Error("Invalid stored game state");
+    return state;
   } catch {
     // A corrupt document is a storage problem, not a client problem.
     throw storageFailure();
@@ -173,20 +176,58 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-function isCard(value: unknown): boolean {
-  if (!isPlainRecord(value)) return false;
-  return (
-    (value.id === "" || (typeof value.id === "string" && CARD_ID_PATTERN.test(value.id))) &&
-    Number.isInteger(value.number) &&
-    Number(value.number) >= 1 &&
-    Number(value.number) <= 12 &&
-    typeof value.isRevealed === "boolean"
+function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
+  return Reflect.ownKeys(value).every(
+    (key) => typeof key === "string" && allowed.includes(key),
   );
 }
 
-function isPlayer(value: unknown): boolean {
-  if (!isPlainRecord(value)) return false;
-  return (
+function normalizeCard(value: unknown, allowEmptySlot: boolean): Card | null {
+  if (
+    !isPlainRecord(value) ||
+    !hasOnlyKeys(value, ["id", "number", "isRevealed"]) ||
+    typeof value.id !== "string" ||
+    (!CARD_ID_PATTERN.test(value.id) && !(allowEmptySlot && value.id === "")) ||
+    !Number.isSafeInteger(value.number) ||
+    Number(value.number) < 1 ||
+    Number(value.number) > 12 ||
+    typeof value.isRevealed !== "boolean"
+  ) {
+    return null;
+  }
+  return { id: value.id, number: Number(value.number), isRevealed: value.isRevealed };
+}
+
+function normalizeCards(value: unknown, allowEmptySlot: boolean): Card[] | null {
+  if (!Array.isArray(value)) return null;
+  const cards: Card[] = [];
+  for (const item of value) {
+    const card = normalizeCard(item, allowEmptySlot);
+    if (!card) return null;
+    cards.push(card);
+  }
+  return cards;
+}
+
+function normalizePlayer(value: unknown): Player | null {
+  if (
+    !isPlainRecord(value) ||
+    !hasOnlyKeys(value, [
+      "id",
+      "name",
+      "seat",
+      "isHost",
+      "isWinner",
+      "isPlaying",
+      "hand",
+      "collection",
+    ])
+  ) {
+    return null;
+  }
+  const hand = normalizeCards(value.hand, false);
+  const collection = normalizeCards(value.collection, false);
+  if (
     typeof value.id === "string" &&
     PLAYER_ID_PATTERN.test(value.id) &&
     typeof value.name === "string" &&
@@ -197,33 +238,70 @@ function isPlayer(value: unknown): boolean {
     (value.isHost === undefined || typeof value.isHost === "boolean") &&
     (value.isWinner === undefined || typeof value.isWinner === "boolean") &&
     (value.isPlaying === undefined || typeof value.isPlaying === "boolean") &&
-    Array.isArray(value.hand) &&
-    value.hand.every(isCard) &&
-    Array.isArray(value.collection) &&
-    value.collection.every(isCard)
-  );
+    hand &&
+    collection
+  ) {
+    return {
+      id: value.id,
+      name: value.name,
+      seat: Number(value.seat),
+      ...(value.isHost === undefined ? {} : { isHost: value.isHost }),
+      ...(value.isWinner === undefined ? {} : { isWinner: value.isWinner }),
+      ...(value.isPlaying === undefined ? {} : { isPlaying: value.isPlaying }),
+      hand,
+      collection,
+    };
+  }
+  return null;
 }
 
-function isMessage(value: unknown): boolean {
-  if (!isPlainRecord(value)) return false;
-  return (
+function normalizeMessage(value: unknown): Message | null {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ["playerName", "timestamp", "content"])) {
+    return null;
+  }
+  if (
     typeof value.playerName === "string" &&
     value.playerName.length > 0 &&
     value.playerName.length <= 40 &&
-    Number.isFinite(value.timestamp) &&
+    Number.isSafeInteger(value.timestamp) &&
+    Number(value.timestamp) >= 0 &&
     typeof value.content === "string" &&
     value.content.length > 0 &&
     value.content.length <= 500
-  );
+  ) {
+    return {
+      playerName: value.playerName,
+      timestamp: Number(value.timestamp),
+      content: value.content,
+    };
+  }
+  return null;
 }
 
-function isOptionalCardArray(value: unknown): boolean {
-  return value === undefined || (Array.isArray(value) && value.every(isCard));
-}
-
-function isGameState(value: unknown): value is ServerState {
-  if (!isPlainRecord(value)) return false;
-  return (
+function normalizeGameState(value: unknown): ServerState | null {
+  if (
+    !isPlainRecord(value) ||
+    !hasOnlyKeys(value, [
+      "gameId",
+      "gameStage",
+      "gameSubStage",
+      "timestamp",
+      "players",
+      "cardDeck",
+      "publicCards",
+      "messages",
+    ])
+  ) {
+    return null;
+  }
+  if (!Array.isArray(value.players) || !Array.isArray(value.messages)) return null;
+  const players = value.players.map(normalizePlayer);
+  const messages = value.messages.map(normalizeMessage);
+  const cardDeck = value.cardDeck === undefined ? undefined : normalizeCards(value.cardDeck, false);
+  const publicCards = value.publicCards === undefined
+    ? undefined
+    : normalizeCards(value.publicCards, true);
+  if (
     typeof value.gameId === "string" &&
     ROOM_ID_PATTERN.test(value.gameId) &&
     (value.gameStage === "stage:lobby" ||
@@ -233,14 +311,25 @@ function isGameState(value: unknown): value is ServerState {
       value.gameSubStage === null ||
       value.gameSubStage === "sub:playing" ||
       value.gameSubStage === "sub:settling") &&
-    Number.isFinite(value.timestamp) &&
-    Array.isArray(value.players) &&
-    value.players.every(isPlayer) &&
-    isOptionalCardArray(value.cardDeck) &&
-    isOptionalCardArray(value.publicCards) &&
-    Array.isArray(value.messages) &&
-    value.messages.every(isMessage)
-  );
+    Number.isSafeInteger(value.timestamp) &&
+    Number(value.timestamp) >= 0 &&
+    players.every((player) => player !== null) &&
+    messages.every((message) => message !== null) &&
+    cardDeck !== null &&
+    publicCards !== null
+  ) {
+    return {
+      gameId: value.gameId,
+      gameStage: value.gameStage,
+      ...(value.gameSubStage === undefined ? {} : { gameSubStage: value.gameSubStage }),
+      timestamp: Number(value.timestamp),
+      players: players as Player[],
+      ...(cardDeck === undefined ? {} : { cardDeck }),
+      ...(publicCards === undefined ? {} : { publicCards }),
+      messages: messages as Message[],
+    };
+  }
+  return null;
 }
 
 /**
@@ -279,12 +368,28 @@ export class RedisGameRepository implements GameRepository {
   private readonly maxUpdateAttempts: number;
 
   constructor(options: GameRepositoryOptions = {}) {
-    this.keyPrefix = options.keyPrefix ?? "";
-    this.ttlSeconds = options.ttlSeconds ?? GAME_TTL_SECONDS;
+    const keyPrefix = options.keyPrefix ?? "";
+    if (!KEY_PREFIX_PATTERN.test(keyPrefix)) {
+      throw new TypeError("Repository key prefix must use at most 128 safe characters");
+    }
+    const positiveSafeInteger = (value: number, name: string): number => {
+      if (!Number.isSafeInteger(value) || value <= 0) {
+        throw new TypeError(`${name} must be a positive safe integer`);
+      }
+      return value;
+    };
+    this.keyPrefix = keyPrefix;
+    this.ttlSeconds = positiveSafeInteger(options.ttlSeconds ?? GAME_TTL_SECONDS, "ttlSeconds");
     this.now = options.now ?? (() => Date.now());
     this.generateRoomId = options.generateRoomId ?? (() => generateRoomId());
-    this.maxRoomIdAttempts = options.maxRoomIdAttempts ?? MAX_ROOM_ID_ATTEMPTS;
-    this.maxUpdateAttempts = options.maxUpdateAttempts ?? MAX_UPDATE_ATTEMPTS;
+    this.maxRoomIdAttempts = positiveSafeInteger(
+      options.maxRoomIdAttempts ?? MAX_ROOM_ID_ATTEMPTS,
+      "maxRoomIdAttempts",
+    );
+    this.maxUpdateAttempts = positiveSafeInteger(
+      options.maxUpdateAttempts ?? MAX_UPDATE_ATTEMPTS,
+      "maxUpdateAttempts",
+    );
   }
 
   /**
@@ -343,8 +448,9 @@ export class RedisGameRepository implements GameRepository {
         const current = parseState(raw);
         // The transition may be asynchronous; awaiting it here keeps a
         // promise from being serialized as an empty document.
-        const next = await transition(structuredClone(current));
-        if (!isGameState(next)) {
+        const transitioned = await transition(structuredClone(current));
+        const next = normalizeGameState(transitioned);
+        if (!next || next.gameId !== roomId) {
           throw new Error("A game transition must return the next game state");
         }
         const bounded = boundChat(next);

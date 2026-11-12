@@ -8,6 +8,7 @@ import {
   applyGameAction,
   type GameEngineDeps,
 } from "@/lib/server/game-engine";
+import { ApiError, storageFailureMessage } from "@/lib/server/errors";
 import { ROOM_ID_PATTERN } from "@/lib/server/validation";
 import type { ServerState } from "@/types";
 
@@ -112,6 +113,13 @@ afterAll(async () => {
 });
 
 describeWithRedis("redis game repository", () => {
+  const expectStorageFailure = async (operation: Promise<unknown>): Promise<void> => {
+    const error = await operation.catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(503);
+    expect((error as ApiError).message).toBe(storageFailureMessage);
+  };
+
   it("creates a room with a server-generated id that matches the room id format", async () => {
     const created = await repository.createGame({
       hostPlayerId: HOST_ID,
@@ -478,6 +486,94 @@ describeWithRedis("redis game repository", () => {
     ).rejects.toThrow(/next game state/);
 
     expect(await repository.readGame(roomId)).toEqual(before);
+  });
+
+  it.each([
+    ["an empty object", {}],
+    [
+      "a partial nested object",
+      {
+        gameId: "malformed1",
+        gameStage: "stage:lobby",
+        timestamp: T0,
+        players: [{ id: HOST_ID }],
+        messages: [],
+      },
+    ],
+  ])("rejects stored valid JSON containing %s without overwriting it", async (_label, malformed) => {
+    const roomId = `bad${Math.random().toString(36).slice(2, 10)}`;
+    const raw = JSON.stringify(malformed);
+    await admin.set(gameKey(roomId), raw, { expiration: { type: "EX", value: 60 } });
+
+    await expectStorageFailure(repository.readGame(roomId));
+    await expectStorageFailure(repository.updateGame(roomId, (state) => state));
+
+    expect(await admin.get(gameKey(roomId))).toBe(raw);
+  });
+
+  it.each([
+    ["changes the room id", (state: ServerState) => ({ ...state, gameId: "anotherroom" })],
+    [
+      "adds a top-level property",
+      (state: ServerState) => ({ ...state, unexpected: true }) as ServerState,
+    ],
+    [
+      "adds a nested property",
+      (state: ServerState) => ({
+        ...state,
+        players: state.players.map((player, index) =>
+          index === 0 ? ({ ...player, unexpected: true } as typeof player) : player,
+        ),
+      }),
+    ],
+    [
+      "puts an empty-id card in a hand",
+      (state: ServerState) => ({
+        ...state,
+        players: state.players.map((player, index) =>
+          index === 0
+            ? {
+                ...player,
+                hand: [{ id: "", number: 1, isRevealed: false }],
+              }
+            : player,
+        ),
+      }),
+    ],
+  ])("rejects a transition that %s and leaves the room intact", async (_label, transition) => {
+    const created = await repository.createGame({ hostPlayerId: HOST_ID, hostName: "Host" });
+    const rawBefore = await admin.get(gameKey(created.gameId));
+
+    await expect(repository.updateGame(created.gameId, transition)).rejects.toThrow();
+
+    expect(await admin.get(gameKey(created.gameId))).toBe(rawBefore);
+  });
+
+  it("rejects a cyclic transition result without overflowing and leaves the room intact", async () => {
+    const created = await repository.createGame({ hostPlayerId: HOST_ID, hostName: "Host" });
+    const rawBefore = await admin.get(gameKey(created.gameId));
+
+    await expect(
+      repository.updateGame(created.gameId, (state) => {
+        const cyclic = state as ServerState & { cycle?: unknown };
+        cyclic.cycle = cyclic;
+        return cyclic;
+      }),
+    ).rejects.toThrow();
+
+    expect(await admin.get(gameKey(created.gameId))).toBe(rawBefore);
+  });
+
+  it("accepts an empty-id removed slot only in public cards", async () => {
+    const created = await repository.createGame({ hostPlayerId: HOST_ID, hostName: "Host" });
+
+    const updated = await repository.updateGame(created.gameId, (state) => ({
+      ...state,
+      publicCards: [{ id: "", number: 7, isRevealed: false }],
+    }));
+
+    expect(updated.publicCards).toEqual([{ id: "", number: 7, isRevealed: false }]);
+    expect((await repository.readGame(created.gameId))?.publicCards).toEqual(updated.publicCards);
   });
 
   it("stores the state a transition returns when it is asynchronous", async () => {
