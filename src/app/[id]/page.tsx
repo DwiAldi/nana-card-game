@@ -38,7 +38,7 @@ const GameRoomPage = ({ params }: { params: { id: string } }) => {
     pollingInterval: 1000,
     onError: (error) => {
       toast({
-        title: "房间读取失败",
+        title: "Unable to load the room",
         description: error.message,
         status: "error",
         duration: 6000,
@@ -78,7 +78,7 @@ const GameRoomPage = ({ params }: { params: { id: string } }) => {
     onSuccess: (result, params) => {
       mutateServerState(result);
       toast({
-        title: `操作成功`,
+        title: `Action completed`,
         // description: `${JSON.stringify(params)}`,
         status: "success",
         duration: 2000,
@@ -88,7 +88,7 @@ const GameRoomPage = ({ params }: { params: { id: string } }) => {
     },
     onError: (error) => {
       toast({
-        title: `操作失败`,
+        title: `Action failed`,
         description: error.message,
         status: "error",
         duration: 2000,

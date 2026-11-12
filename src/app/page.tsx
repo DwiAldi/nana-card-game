@@ -21,7 +21,6 @@ import { randomString } from "@/lib/random";
 import { BsGithub } from "react-icons/bs";
 import { useRouter, useSearchParams } from "next/navigation";
 import GameRuleButton from "@/components/GameRuleButton";
-import LanguageButton from "@/components/LanguageButton";
 import { useTranslation } from "@/i18n/index";
 import { useGameSettingsStore } from "@/store/setting-store";
 import { BsRobot } from "react-icons/bs";
@@ -46,7 +45,7 @@ const GamePage = () => {
   const hostRoom = async () => {
     if (!playerName) {
       toast({
-        title: `请输入玩家名称`,
+        title: `Enter your name`,
         status: "error",
         duration: 2000,
         isClosable: true,
@@ -71,7 +70,7 @@ const GamePage = () => {
       router.push(`/${newGameId}`);
     } else {
       toast({
-        title: `服务器错误`,
+        title: `Server error`,
         description:
           "Vercel KV max daily request limit exceeded. Limit: 10000, Usage: 10000.",
         status: "error",
@@ -85,7 +84,7 @@ const GamePage = () => {
   const joinRoom = async () => {
     if (!playerName) {
       toast({
-        title: `请输入玩家名称`,
+        title: `Enter your name`,
         status: "error",
         duration: 2000,
         isClosable: true,
@@ -109,7 +108,7 @@ const GamePage = () => {
       router.push(`/${joinRoomId}`);
     } else {
       toast({
-        title: `服务器错误`,
+        title: `Server error`,
         description:
           "Vercel KV max daily request limit exceeded. Limit: 10000, Usage: 10000.",
         status: "error",
@@ -150,7 +149,7 @@ const GamePage = () => {
             fontSize="lg"
             fontWeight="extrabold"
           >
-            {t("NANA_GAME_DESCRIPTION")} <GameRuleButton /> <LanguageButton />
+            {t("NANA_GAME_DESCRIPTION")} <GameRuleButton />
           </Text>
         </VStack>
         {!joinParam && (

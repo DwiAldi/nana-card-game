@@ -51,7 +51,7 @@ export interface LocalGameState {
   currentPlayerIndex: number;
   winner: Player | null;
   turnMessage: string | null;
-  // Bot 记忆存储：每个 bot 维护自己的视角
+  // Bot memories: each bot maintains its own view of the game.
   botMemories: Map<string, BotMemory>;
 }
 
@@ -187,7 +187,7 @@ export const useLocalGameStore = create<LocalGameState & LocalGameActions>()(
         if (player.id.startsWith("bot-")) {
           const memory = initBotMemory(
             player.id,
-            player.hand, // bot 自己的手牌（完整已知）
+            player.hand, // The bot's own hand (fully known).
             players,
             publicCards,
             numberRange

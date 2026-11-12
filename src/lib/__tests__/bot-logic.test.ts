@@ -78,7 +78,7 @@ describe("BotMemory Initialization", () => {
   const publicCards = createTestPublicCards();
   const botHand = players[1].hand; // bot-1's hand
 
-  test("应正确初始化 bot 自己的手牌（完整已知）", () => {
+  test("initializes the bot's own hand with fully known values", () => {
     const memory = initBotMemory(
       "bot-1",
       botHand,
@@ -93,7 +93,7 @@ describe("BotMemory Initialization", () => {
     expect(memory.myHand[2]).toEqual({ cardId: "9-c", number: 9 });
   });
 
-  test("应正确初始化其他玩家手牌（全部未知）", () => {
+  test("initializes other players' hands with unknown values", () => {
     const memory = initBotMemory(
       "bot-1",
       botHand,
@@ -111,7 +111,7 @@ describe("BotMemory Initialization", () => {
     expect(bot2Hand?.cards.every((slot) => slot.number === null)).toBe(true);
   });
 
-  test("应正确初始化公共区牌（全部未知）", () => {
+  test("initializes public cards with unknown values", () => {
     const memory = initBotMemory(
       "bot-1",
       botHand,
@@ -124,7 +124,7 @@ describe("BotMemory Initialization", () => {
     expect(memory.publicCards.every((slot) => slot.number === null)).toBe(true);
   });
 
-  test("应正确设置数字范围", () => {
+  test("sets the number range correctly", () => {
     const memory = initBotMemory(
       "bot-1",
       botHand,
@@ -136,7 +136,7 @@ describe("BotMemory Initialization", () => {
     expect(memory.numberRange).toEqual({ min: 1, max: 10 });
   });
 
-  test("应初始化为空的收集记录", () => {
+  test("initializes an empty collection record", () => {
     const memory = initBotMemory(
       "bot-1",
       botHand,
@@ -156,7 +156,7 @@ describe("Memory Update on Reveal", () => {
   const publicCards = createTestPublicCards();
   const botHand = players[1].hand;
 
-  test("翻开其他玩家牌时应更新对应槽位的 number", () => {
+  test("updates the matching slot when another player's card is revealed", () => {
     let memory = initBotMemory(
       "bot-1",
       botHand,
@@ -174,7 +174,7 @@ describe("Memory Update on Reveal", () => {
     expect(memory.otherPlayersHands.get("me")?.cards[0].number).toBe(2);
   });
 
-  test("翻开公共牌时应更新对应槽位的 number", () => {
+  test("updates the matching slot when a public card is revealed", () => {
     let memory = initBotMemory(
       "bot-1",
       botHand,
@@ -189,7 +189,7 @@ describe("Memory Update on Reveal", () => {
     expect(memory.publicCards[0].number).toBe(1);
   });
 
-  test("更新应该是不可变的（返回新对象）", () => {
+  test("updates immutably by returning a new object", () => {
     const memory = initBotMemory(
       "bot-1",
       botHand,
@@ -202,11 +202,11 @@ describe("Memory Update on Reveal", () => {
 
     expect(newMemory).not.toBe(memory);
     expect(newMemory.publicCards).not.toBe(memory.publicCards);
-    expect(memory.publicCards[0].number).toBeNull(); // 原对象未改变
-    expect(newMemory.publicCards[0].number).toBe(1); // 新对象已改变
+    expect(memory.publicCards[0].number).toBeNull(); // Original object is unchanged.
+    expect(newMemory.publicCards[0].number).toBe(1); // New object contains the update.
   });
 
-  test("翻开自己的牌时应正确更新（理论上已知）", () => {
+  test("updates correctly when revealing an already known card from its own hand", () => {
     let memory = initBotMemory(
       "bot-1",
       botHand,
@@ -229,7 +229,7 @@ describe("Memory Update on Collect", () => {
   const publicCards = createTestPublicCards();
   const botHand = players[1].hand;
 
-  test("收集三条后应记录收集", () => {
+  test("records a collected set of three", () => {
     let memory = initBotMemory(
       "bot-1",
       botHand,
@@ -243,7 +243,7 @@ describe("Memory Update on Collect", () => {
     expect(memory.collectedSets.get("me")).toContain(5);
   });
 
-  test("收集后应从自己手牌移除该数字的牌", () => {
+  test("removes the collected number from its own hand", () => {
     let memory = initBotMemory(
       "bot-1",
       botHand,
@@ -253,17 +253,17 @@ describe("Memory Update on Collect", () => {
     );
     const initialLength = memory.myHand.length;
 
-    // bot-1 手牌中没有5，所以不变
+    // bot-1 has no 5, so its hand is unchanged.
     memory = updateMemoryOnCollect(memory, "me", 5);
     expect(memory.myHand.length).toBe(initialLength);
 
-    // bot-1 手牌中有3
+    // bot-1 has a 3.
     memory = updateMemoryOnCollect(memory, "me", 3);
     expect(memory.myHand.length).toBe(initialLength - 1);
     expect(memory.myHand.find((s) => s.number === 3)).toBeUndefined();
   });
 
-  test("收集后其他玩家已知的该数字牌也应被移除", () => {
+  test("removes known copies of a collected number from other players' hands", () => {
     let memory = initBotMemory(
       "bot-1",
       botHand,
@@ -272,22 +272,22 @@ describe("Memory Update on Collect", () => {
       { min: 1, max: 12 }
     );
 
-    // 先翻开一张牌使其已知
+    // Reveal a card first so its value is known.
     const cardId = memory.otherPlayersHands.get("me")?.cards[0].cardId!;
     memory = updateMemoryOnReveal(memory, cardId, 2, {
       type: "player",
       playerId: "me",
     });
 
-    // 收集2
+    // Collect the 2s.
     memory = updateMemoryOnCollect(memory, "someone", 2);
 
-    // me 手牌中已知的2被移除
+    // The known 2 is removed from me's hand.
     const meCards = memory.otherPlayersHands.get("me")?.cards;
     expect(meCards?.find((s) => s.number === 2)).toBeUndefined();
   });
 
-  test("收集后公共区已知的该数字牌也应被移除", () => {
+  test("removes known public copies of a collected number", () => {
     let memory = initBotMemory(
       "bot-1",
       botHand,
@@ -296,19 +296,19 @@ describe("Memory Update on Collect", () => {
       { min: 1, max: 12 }
     );
 
-    // 先翻开公共牌使其已知
+    // Reveal a public card first so its value is known.
     memory = updateMemoryOnReveal(memory, memory.publicCards[0].cardId, 1, {
       type: "public",
     });
 
-    // 收集1
+    // Collect the 1s.
     memory = updateMemoryOnCollect(memory, "someone", 1);
 
-    // 公共区已知的1被移除
+    // The known public 1 is removed.
     expect(memory.publicCards.find((s) => s.number === 1)).toBeUndefined();
   });
 
-  test("收集是不可变操作", () => {
+  test("collecting a set is immutable", () => {
     const memory = initBotMemory(
       "bot-1",
       botHand,
@@ -333,7 +333,7 @@ describe("Derived Calculations", () => {
     const publicCards = createTestPublicCards();
     const botHand = players[1].hand;
 
-    test("自己的头尾值总是已知", () => {
+    test("always knows its own head and tail values", () => {
       const memory = initBotMemory(
         "bot-1",
         botHand,
@@ -346,7 +346,7 @@ describe("Derived Calculations", () => {
       expect(getKnownTailValue(memory, "bot-1")).toBe(9);
     });
 
-    test("其他玩家未翻牌时头尾值为 null", () => {
+    test("returns null for other players' unrevealed head and tail values", () => {
       const memory = initBotMemory(
         "bot-1",
         botHand,
@@ -359,7 +359,7 @@ describe("Derived Calculations", () => {
       expect(getKnownTailValue(memory, "me")).toBeNull();
     });
 
-    test("翻开头牌后 knownHeadValue 应返回该值", () => {
+    test("returns the head value after it is revealed", () => {
       let memory = initBotMemory(
         "bot-1",
         botHand,
@@ -376,7 +376,7 @@ describe("Derived Calculations", () => {
       expect(getKnownHeadValue(memory, "me")).toBe(2);
     });
 
-    test("翻开尾牌后 knownTailValue 应返回该值", () => {
+    test("returns the tail value after it is revealed", () => {
       let memory = initBotMemory(
         "bot-1",
         botHand,
@@ -394,7 +394,7 @@ describe("Derived Calculations", () => {
       expect(getKnownTailValue(memory, "me")).toBe(8);
     });
 
-    test("空手牌时返回 null", () => {
+    test("returns null for an empty hand", () => {
       const emptyPlayers = [
         createPlayer("me", []),
         createPlayer("bot-1", [createCard("3-a", 3)]),
@@ -417,7 +417,7 @@ describe("Derived Calculations", () => {
     const publicCards = createTestPublicCards();
     const botHand = players[1].hand;
 
-    test("应返回正确的手牌数量", () => {
+    test("returns the correct hand size", () => {
       const memory = initBotMemory(
         "bot-1",
         botHand,
@@ -430,7 +430,7 @@ describe("Derived Calculations", () => {
       expect(getHandSize(memory, "me")).toBe(3);
     });
 
-    test("收集后手牌数量应减少", () => {
+    test("reduces the hand size after collection", () => {
       let memory = initBotMemory(
         "bot-1",
         botHand,
@@ -440,12 +440,12 @@ describe("Derived Calculations", () => {
       );
       const before = getHandSize(memory, "bot-1");
 
-      memory = updateMemoryOnCollect(memory, "me", 3); // bot-1 有一张3
+      memory = updateMemoryOnCollect(memory, "me", 3); // bot-1 has one 3.
 
       expect(getHandSize(memory, "bot-1")).toBe(before - 1);
     });
 
-    test("不存在的玩家返回 0", () => {
+    test("returns 0 for a nonexistent player", () => {
       const memory = initBotMemory(
         "bot-1",
         botHand,
@@ -463,8 +463,8 @@ describe("Derived Calculations", () => {
     const publicCards = createTestPublicCards();
     const botHand = players[1].hand;
 
-    test("初始时每个数字剩余 3 - 自己手中的数量", () => {
-      // bot-1 手牌：[3, 6, 9]
+    test("initially counts three copies minus those in its own hand", () => {
+      // bot-1's hand: [3, 6, 9].
       const memory = initBotMemory(
         "bot-1",
         botHand,
@@ -475,10 +475,10 @@ describe("Derived Calculations", () => {
 
       expect(getGlobalRemainingCount(memory, 3)).toBe(2); // 3-1=2
       expect(getGlobalRemainingCount(memory, 6)).toBe(2); // 3-1=2
-      expect(getGlobalRemainingCount(memory, 1)).toBe(3); // 未知位置
+      expect(getGlobalRemainingCount(memory, 1)).toBe(3); // Unknown locations.
     });
 
-    test("收集后该数字剩余为 0", () => {
+    test("returns 0 remaining copies after a number is collected", () => {
       let memory = initBotMemory(
         "bot-1",
         botHand,
@@ -491,7 +491,7 @@ describe("Derived Calculations", () => {
       expect(getGlobalRemainingCount(memory, 5)).toBe(0);
     });
 
-    test("翻开牌后剩余数量应正确更新", () => {
+    test("updates the remaining count correctly after a reveal", () => {
       let memory = initBotMemory(
         "bot-1",
         botHand,
@@ -500,12 +500,12 @@ describe("Derived Calculations", () => {
         { min: 1, max: 12 }
       );
 
-      // 翻开一张公共牌是 1
+      // Reveal a public 1.
       memory = updateMemoryOnReveal(memory, memory.publicCards[0].cardId, 1, {
         type: "public",
       });
 
-      // 现在1剩余2张
+      // Two 1s now remain unaccounted for.
       expect(getGlobalRemainingCount(memory, 1)).toBe(2);
     });
   });
@@ -515,7 +515,7 @@ describe("Derived Calculations", () => {
     const publicCards = createTestPublicCards();
     const botHand = players[1].hand;
 
-    test("已知头值后应排除更小的数字", () => {
+    test("excludes numbers below the known head value", () => {
       let memory = initBotMemory(
         "bot-1",
         botHand,
@@ -532,11 +532,11 @@ describe("Derived Calculations", () => {
       const excluded = getExcludedNumbers(memory, "me");
       expect(excluded.has(1)).toBe(true);
       expect(excluded.has(4)).toBe(true);
-      expect(excluded.has(5)).toBe(false); // 5本身不排除
+      expect(excluded.has(5)).toBe(false); // Do not exclude 5 itself.
       expect(excluded.has(6)).toBe(false);
     });
 
-    test("已知尾值后应排除更大的数字", () => {
+    test("excludes numbers above the known tail value", () => {
       let memory = initBotMemory(
         "bot-1",
         botHand,
@@ -558,8 +558,8 @@ describe("Derived Calculations", () => {
       expect(excluded.has(8)).toBe(false);
     });
 
-    test("自己的排除数字基于实际手牌范围", () => {
-      // bot-1 手牌：[3, 6, 9]
+    test("excludes numbers based on its own actual hand range", () => {
+      // bot-1's hand: [3, 6, 9].
       const memory = initBotMemory(
         "bot-1",
         botHand,
@@ -571,9 +571,9 @@ describe("Derived Calculations", () => {
       const excluded = getExcludedNumbers(memory, "bot-1");
       expect(excluded.has(1)).toBe(true); // < 3
       expect(excluded.has(2)).toBe(true); // < 3
-      expect(excluded.has(3)).toBe(false); // = 头
+      expect(excluded.has(3)).toBe(false); // Equals the head.
       expect(excluded.has(10)).toBe(true); // > 9
-      expect(excluded.has(9)).toBe(false); // = 尾
+      expect(excluded.has(9)).toBe(false); // Equals the tail.
     });
   });
 
@@ -582,7 +582,7 @@ describe("Derived Calculations", () => {
     const publicCards = createTestPublicCards();
     const botHand = players[1].hand;
 
-    test("初始时所有公共牌都未知", () => {
+    test("all public cards are initially unknown", () => {
       const memory = initBotMemory(
         "bot-1",
         botHand,
@@ -594,7 +594,7 @@ describe("Derived Calculations", () => {
       expect(getUnknownPublicCount(memory)).toBe(4);
     });
 
-    test("翻开公共牌后未知数量减少", () => {
+    test("reduces the unknown count after revealing a public card", () => {
       let memory = initBotMemory(
         "bot-1",
         botHand,
@@ -616,7 +616,7 @@ describe("Derived Calculations", () => {
     const publicCards = createTestPublicCards();
     const botHand = players[1].hand;
 
-    test("初始时所有数字在公共区的已知数量为 0", () => {
+    test("initially has zero known public copies of every number", () => {
       const memory = initBotMemory(
         "bot-1",
         botHand,
@@ -629,7 +629,7 @@ describe("Derived Calculations", () => {
       expect(getKnownPublicCountForNumber(memory, 5)).toBe(0);
     });
 
-    test("翻开公共牌后应正确计数", () => {
+    test("counts correctly after revealing public cards", () => {
       let memory = initBotMemory(
         "bot-1",
         botHand,
@@ -638,7 +638,7 @@ describe("Derived Calculations", () => {
         { min: 1, max: 12 }
       );
 
-      // 翻开两张1
+      // Reveal two 1s.
       memory = updateMemoryOnReveal(memory, memory.publicCards[0].cardId, 1, {
         type: "public",
       });
@@ -658,7 +658,7 @@ describe("Probability Calculation", () => {
   const publicCards = createTestPublicCards();
   const botHand = players[1].hand;
 
-  test("已知头值等于目标时概率应为 1.0", () => {
+  test("returns probability 1.0 when the known head matches the target", () => {
     let memory = initBotMemory(
       "bot-1",
       botHand,
@@ -680,7 +680,7 @@ describe("Probability Calculation", () => {
     expect(prob).toBe(1.0);
   });
 
-  test("已知头值不等于目标时概率应为 0.0", () => {
+  test("returns probability 0.0 when the known head differs from the target", () => {
     let memory = initBotMemory(
       "bot-1",
       botHand,
@@ -702,7 +702,7 @@ describe("Probability Calculation", () => {
     expect(prob).toBe(0.0);
   });
 
-  test("目标数字已全部收集时概率应为 0", () => {
+  test("returns probability 0 when the target number has been collected", () => {
     let memory = initBotMemory(
       "bot-1",
       botHand,
@@ -720,7 +720,7 @@ describe("Probability Calculation", () => {
     expect(prob).toBe(0);
   });
 
-  test("目标数字被头约束排除时概率应为 0", () => {
+  test("returns probability 0 when the head constraint excludes the target", () => {
     let memory = initBotMemory(
       "bot-1",
       botHand,
@@ -728,7 +728,7 @@ describe("Probability Calculation", () => {
       publicCards,
       { min: 1, max: 12 }
     );
-    // me 的头值是5，则不可能有1-4
+    // me's head is 5, so its hand cannot contain 1 through 4.
     const headCardId = memory.otherPlayersHands.get("me")?.cards[0].cardId!;
     memory = updateMemoryOnReveal(memory, headCardId, 5, {
       type: "player",
@@ -743,8 +743,8 @@ describe("Probability Calculation", () => {
     expect(prob).toBe(0);
   });
 
-  test("自己的头尾概率应正确计算", () => {
-    // bot-1 手牌：[3, 6, 9]
+  test("calculates its own head and tail probabilities correctly", () => {
+    // bot-1's hand: [3, 6, 9].
     const memory = initBotMemory(
       "bot-1",
       botHand,
@@ -753,7 +753,7 @@ describe("Probability Calculation", () => {
       { min: 1, max: 12 }
     );
 
-    // 自己头是3
+    // Its own head is 3.
     expect(
       calculateProbability(memory, 3, {
         type: "player",
@@ -770,7 +770,7 @@ describe("Probability Calculation", () => {
       })
     ).toBe(0.0);
 
-    // 自己尾是9
+    // Its own tail is 9.
     expect(
       calculateProbability(memory, 9, {
         type: "player",
@@ -780,7 +780,7 @@ describe("Probability Calculation", () => {
     ).toBe(1.0);
   });
 
-  test("公共区概率应正确计算", () => {
+  test("calculates public-area probability correctly", () => {
     let memory = initBotMemory(
       "bot-1",
       botHand,
@@ -789,12 +789,12 @@ describe("Probability Calculation", () => {
       { min: 1, max: 12 }
     );
 
-    // 公共区4张，翻开1张是1
+    // Of four public cards, reveal one 1.
     memory = updateMemoryOnReveal(memory, memory.publicCards[0].cardId, 1, {
       type: "public",
     });
 
-    // 1 剩余2张（已知1张在公共区），可能在剩余3张未知公共牌中的概率
+    // Two 1s remain (one is known in public); estimate the probability among three unknown public cards.
     const prob = calculateProbability(memory, 1, { type: "public" });
     expect(prob).toBeGreaterThan(0);
     expect(prob).toBeLessThanOrEqual(1);
@@ -804,8 +804,8 @@ describe("Probability Calculation", () => {
 // ==================== Decision Making Tests ====================
 
 describe("Bot Decision Making", () => {
-  describe("空链状态 (flip-1)", () => {
-    test("应优先翻自己的头牌作为起点", () => {
+  describe("Empty chain (flip-1)", () => {
+    test("prefers its own head card as a starting point", () => {
       const players = createTestPlayers();
       const publicCards = createTestPublicCards();
       const botHand = players[1].hand;
@@ -820,11 +820,11 @@ describe("Bot Decision Making", () => {
       const decision = makeBotDecision(memory, [], players, publicCards);
 
       expect(decision.action).toBe("reveal-player-card");
-      expect(decision.playerId).toBe("bot-1"); // 自己
-      expect(decision.minMax).toBe("min"); // 头牌
+      expect(decision.playerId).toBe("bot-1"); // Itself.
+      expect(decision.minMax).toBe("min"); // Head card.
     });
 
-    test("当已知两处有相同数字时应利用这个信息", () => {
+    test("uses knowledge of two locations with the same number", () => {
       const players = createTestPlayers();
       const publicCards = createTestPublicCards();
       const botHand = players[1].hand;
@@ -837,7 +837,7 @@ describe("Bot Decision Making", () => {
         { min: 1, max: 12 }
       );
 
-      // 设置 me 头值=4, bot-2 头值=4
+      // Set me's head to 4 and bot-2's head to 4.
       const meHeadId = memory.otherPlayersHands.get("me")?.cards[0].cardId!;
       const bot2HeadId = memory.otherPlayersHands.get("bot-2")?.cards[0].cardId!;
       memory = updateMemoryOnReveal(memory, meHeadId, 4, {
@@ -851,15 +851,15 @@ describe("Bot Decision Making", () => {
 
       const decision = makeBotDecision(memory, [], players, publicCards);
 
-      // 应该翻其中一个已知是4的头
+      // Reveal one of the heads known to be 4.
       expect(decision.action).toBe("reveal-player-card");
       expect(["me", "bot-2"]).toContain(decision.playerId);
       expect(decision.confidence).toBe(1.0);
     });
   });
 
-  describe("已翻1张状态 (flip-2)", () => {
-    test("应优先选择确定性来源", () => {
+  describe("One card revealed (flip-2)", () => {
+    test("prefers a certain source", () => {
       const players = createTestPlayers();
       const publicCards = createTestPublicCards();
       const botHand = players[1].hand;
@@ -872,14 +872,14 @@ describe("Bot Decision Making", () => {
         { min: 1, max: 12 }
       );
 
-      // me 的头值已知是6
+      // me's head is known to be 6.
       const meHeadId = memory.otherPlayersHands.get("me")?.cards[0].cardId!;
       memory = updateMemoryOnReveal(memory, meHeadId, 6, {
         type: "player",
         playerId: "me",
       });
 
-      // 当前链有一张6
+      // The current chain contains one 6.
       const currentChain = [createCard("6-x", 6, true)];
       const decision = makeBotDecision(memory, currentChain, players, publicCards);
 
@@ -890,9 +890,9 @@ describe("Bot Decision Making", () => {
     });
   });
 
-  describe("已翻2张状态 (flip-3)", () => {
-    test("有确定性第三张时应立即选择（目标在头或尾）", () => {
-      // bot手牌中头牌是5
+  describe("Two cards revealed (flip-3)", () => {
+    test("immediately selects a certain third card at the head or tail", () => {
+      // The bot's head card is 5.
       const customBotHand = [
         createCard("5-a", 5),
         createCard("7-c", 7),
@@ -922,15 +922,15 @@ describe("Bot Decision Making", () => {
       ];
       const decision = makeBotDecision(memory, currentChain, players, publicCards);
 
-      // bot知道自己头牌是5，应该翻自己的头牌
+      // The bot knows its head is 5 and should reveal it.
       expect(decision.action).toBe("reveal-player-card");
       expect(decision.playerId).toBe("bot-1");
       expect(decision.minMax).toBe("min");
       expect(decision.confidence).toBe(1.0);
     });
 
-    test("当目标在自己的尾牌时应翻尾牌", () => {
-      // bot手牌中尾牌是5
+    test("reveals its tail when it contains the target", () => {
+      // The bot's tail card is 5.
       const customBotHand = [
         createCard("3-a", 3),
         createCard("4-c", 4),
@@ -960,14 +960,14 @@ describe("Bot Decision Making", () => {
       ];
       const decision = makeBotDecision(memory, currentChain, players, publicCards);
 
-      // bot知道自己尾牌是5，应该翻自己的尾牌
+      // The bot knows its tail is 5 and should reveal it.
       expect(decision.action).toBe("reveal-player-card");
       expect(decision.playerId).toBe("bot-1");
       expect(decision.minMax).toBe("max");
       expect(decision.confidence).toBe(1.0);
     });
 
-    test("应避免翻已知不匹配的来源", () => {
+    test("avoids revealing known mismatches", () => {
       const players = createTestPlayers();
       const publicCards = createTestPublicCards();
       const botHand = players[1].hand;
@@ -980,7 +980,7 @@ describe("Bot Decision Making", () => {
         { min: 1, max: 12 }
       );
 
-      // me 的头值已知是2
+      // me's head is known to be 2.
       const meHeadId = memory.otherPlayersHands.get("me")?.cards[0].cardId!;
       memory = updateMemoryOnReveal(memory, meHeadId, 2, {
         type: "player",
@@ -993,7 +993,7 @@ describe("Bot Decision Making", () => {
       ];
       const decision = makeBotDecision(memory, currentChain, players, publicCards);
 
-      // 不应该选择已知是2的头
+      // Do not choose the head known to be 2.
       if (
         decision.action === "reveal-player-card" &&
         decision.playerId === "me"
@@ -1007,15 +1007,15 @@ describe("Bot Decision Making", () => {
 // ==================== Number Range Tests ====================
 
 describe("getNumberRangeForPlayerCount", () => {
-  test("2人局应去掉11、12", () => {
+  test("excludes 11 and 12 for two players", () => {
     expect(getNumberRangeForPlayerCount(2)).toEqual({ min: 1, max: 10 });
   });
 
-  test("3人局应去掉12", () => {
+  test("excludes 12 for three players", () => {
     expect(getNumberRangeForPlayerCount(3)).toEqual({ min: 1, max: 11 });
   });
 
-  test("4-6人局应使用全部数字", () => {
+  test("uses all numbers for four to six players", () => {
     expect(getNumberRangeForPlayerCount(4)).toEqual({ min: 1, max: 12 });
     expect(getNumberRangeForPlayerCount(5)).toEqual({ min: 1, max: 12 });
     expect(getNumberRangeForPlayerCount(6)).toEqual({ min: 1, max: 12 });
@@ -1025,7 +1025,7 @@ describe("getNumberRangeForPlayerCount", () => {
 // ==================== Edge Cases Tests ====================
 
 describe("Edge Cases", () => {
-  test("手牌有重复数字时应正确处理", () => {
+  test("handles duplicate numbers in a hand correctly", () => {
     const duplicateHand = [
       createCard("3-a", 3),
       createCard("3-b", 3),
@@ -1045,17 +1045,17 @@ describe("Edge Cases", () => {
       { min: 1, max: 12 }
     );
 
-    // 手牌应正确记录
+    // The hand should be recorded correctly.
     expect(memory.myHand).toHaveLength(3);
     expect(memory.myHand[0].number).toBe(3);
     expect(memory.myHand[1].number).toBe(3);
 
-    // 头尾值应正确
+    // Head and tail values should be correct.
     expect(getKnownHeadValue(memory, "bot-1")).toBe(3);
     expect(getKnownTailValue(memory, "bot-1")).toBe(5);
   });
 
-  test("所有玩家手牌为空时应只翻公共牌", () => {
+  test("only reveals public cards when every player's hand is empty", () => {
     const emptyPlayers = [
       createPlayer("me", []),
       createPlayer("bot-1", []),
@@ -1075,7 +1075,7 @@ describe("Edge Cases", () => {
     expect(decision.action).toBe("reveal-public-card");
   });
 
-  test("头牌被移除后下一张成为新的头", () => {
+  test("uses the next card as the new head after removing the old head", () => {
     const players = createTestPlayers();
     const publicCards = createTestPublicCards();
     const botHand = players[1].hand;
@@ -1088,7 +1088,7 @@ describe("Edge Cases", () => {
       { min: 1, max: 12 }
     );
 
-    // 翻开 me 的头牌是2
+    // Reveal me's head card as 2.
     const meHeadId = memory.otherPlayersHands.get("me")?.cards[0].cardId!;
     memory = updateMemoryOnReveal(memory, meHeadId, 2, {
       type: "player",
@@ -1096,14 +1096,14 @@ describe("Edge Cases", () => {
     });
     expect(getKnownHeadValue(memory, "me")).toBe(2);
 
-    // 收集2
+    // Collect the 2s.
     memory = updateMemoryOnCollect(memory, "someone", 2);
 
-    // 头牌被移除，新头未知
+    // The old head is removed and the new head is unknown.
     expect(getKnownHeadValue(memory, "me")).toBeNull();
   });
 
-  test("getAllPossibleActions 应返回所有可能行动", () => {
+  test("getAllPossibleActions returns all possible actions", () => {
     const players = createTestPlayers();
     const publicCards = createTestPublicCards();
     const botHand = players[1].hand;
@@ -1118,13 +1118,13 @@ describe("Edge Cases", () => {
 
     const actions = getAllPossibleActions(memory, players, publicCards);
 
-    // 应该有玩家头尾和公共牌的行动
+    // Include actions for players' heads and tails and for public cards.
     expect(actions.length).toBeGreaterThan(0);
     expect(actions.some((a) => a.action === "reveal-player-card")).toBe(true);
     expect(actions.some((a) => a.action === "reveal-public-card")).toBe(true);
   });
 
-  test("evaluateAllActions 应返回排序后的候选行动", () => {
+  test("evaluateAllActions returns sorted candidate actions", () => {
     const players = createTestPlayers();
     const publicCards = createTestPublicCards();
     const botHand = players[1].hand;
@@ -1140,7 +1140,7 @@ describe("Edge Cases", () => {
     const candidates = evaluateAllActions(memory, [], players, publicCards);
 
     expect(candidates.length).toBeGreaterThan(0);
-    // 应该按期望收益排序
+    // Sort by expected payoff.
     for (let i = 1; i < candidates.length; i++) {
       expect(candidates[i - 1].expectedValue).toBeGreaterThanOrEqual(
         candidates[i].expectedValue
@@ -1148,4 +1148,3 @@ describe("Edge Cases", () => {
     }
   });
 });
-

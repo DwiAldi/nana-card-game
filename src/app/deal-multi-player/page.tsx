@@ -73,8 +73,8 @@ export default function App() {
       setTimeout(() => {
         resetAll();
         toast({
-          title: "挑战失败",
-          description: "试着连续翻出三张一样的数字",
+          title: "Challenge failed",
+          description: "Try to reveal three matching numbers in a row",
           status: "error",
           duration: 9000,
           isClosable: true,
@@ -90,7 +90,7 @@ export default function App() {
   return (
     <VStack w="100vw" h="100vh" bgColor="gray.100">
       <VStack w="600px" bgColor="#333" borderRadius="24px">
-        <Text color="white">电脑</Text>
+        <Text color="white">Computer</Text>
         <HStack h="136px" padding="8px" flexWrap="wrap">
           {botCards.map((cardId, index) => (
             <NanaCard
@@ -138,7 +138,7 @@ export default function App() {
           </AnimatePresence>
         </Center>
         <VStack w="600px" h="320px" bgColor="#fff" borderRadius="24px">
-          <p>公共区</p>
+          <p>Public area</p>
           <HStack padding="8px" flexWrap="wrap">
             {publicCards.map((cardId, index) => (
               <NanaCard
@@ -155,28 +155,28 @@ export default function App() {
 
         <VStack>
           <Button colorScheme="cyan" onClick={() => shuffleCards()}>
-            洗牌
+            Shuffle
           </Button>
           <Button colorScheme="cyan" onClick={() => dealRandomCard("bot")}>
-            发牌给机器人
+            Deal to bot
           </Button>
           <Button colorScheme="cyan" onClick={() => dealRandomCard("public")}>
-            发牌到公共区
+            Deal to public area
           </Button>
           <Button colorScheme="cyan" onClick={() => dealRandomCard("me")}>
-            发牌给我
+            Deal to me
           </Button>
           <Button colorScheme="cyan" onClick={() => resetAll()}>
-            重置
+            Reset
           </Button>
         </VStack>
       </HStack>
 
       <HStack>
-        <Button colorScheme="cyan">最小</Button>
+        <Button colorScheme="cyan">Lowest</Button>
         <VStack w="600px" bgColor="#333" borderRadius="24px">
-          <Text color="white">已揭示的卡牌：{revealedCardNumbers}</Text>
-          <Text color="white">我的卡牌</Text>
+          <Text color="white">Revealed cards: {revealedCardNumbers}</Text>
+          <Text color="white">My cards</Text>
           <HStack h="136px" padding="8px" flexWrap="wrap">
             {myCards.map((cardId, index) => (
               <NanaCard
@@ -190,7 +190,7 @@ export default function App() {
             ))}
           </HStack>
         </VStack>
-        <Button colorScheme="cyan">最大</Button>
+        <Button colorScheme="cyan">Highest</Button>
       </HStack>
     </VStack>
   );

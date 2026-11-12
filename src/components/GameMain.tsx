@@ -52,9 +52,9 @@ export default function GameMain({
   useEffect(() => {
     if (isMePlaying) {
       playDingDong();
-      setBigToastMessage("我的回合");
+      setBigToastMessage("Your turn");
     } else if (playingPlayer) {
-      setBigToastMessage(`${playingPlayer.name}开始行动`);
+      setBigToastMessage(`${playingPlayer.name}'s turn`);
     } else {
       setBigToastMessage(undefined);
     }
@@ -63,11 +63,11 @@ export default function GameMain({
   useEffect(() => {
     if (serverState?.gameStage === "stage:game-over") {
       playWin();
-      setBigToastMessage("游戏结束");
+      setBigToastMessage("Game over");
     }
     if (serverState?.gameStage === "stage:in-game") {
       playWoosh();
-      setBigToastMessage("游戏开始");
+      setBigToastMessage("Game started");
     }
   }, [serverState?.gameStage]);
 
@@ -84,14 +84,14 @@ export default function GameMain({
     >
       <VStack sx={{ position: "fixed", top: "16px", right: "16px" }}>
         <HStack>
-          <Text color="white">游戏ID:</Text>
+          <Text color="white">Game ID:</Text>
           <Tag
             colorScheme="gray"
             cursor="pointer"
             onClick={() => {
               const joinUrl = `${window.location.origin}?join=${serverState.gameId}`;
               navigator.clipboard.writeText(joinUrl);
-              toastInfo("邀请链接已拷贝到剪贴板");
+              toastInfo("Invite link copied to clipboard");
             }}
           >
             {serverState.gameId}
@@ -102,7 +102,7 @@ export default function GameMain({
           onClick={() => act("action:start-game")}
           // isDisabled={gameStage !== "seat"}
         >
-          开始游戏
+          Start game
         </Button>
       </VStack>
 
@@ -132,7 +132,7 @@ export default function GameMain({
           borderRadius="16px"
           justifyContent="center"
         >
-          <Text color="white">公共区</Text>
+          <Text color="white">Public area</Text>
           {serverState?.cardDeck && serverState.cardDeck.length > 0 && (
             <VStack>
               <CardDeck cards={serverState.cardDeck}></CardDeck>
@@ -164,7 +164,7 @@ export default function GameMain({
 
       <Box sx={{ position: "fixed", bottom: 2, left: 2 }}>
         {/*<Text color="white">*/}
-        {/*  服务器状态: {serverState.gameStage} - {serverState.gameSubStage} -{" "}*/}
+        {/*  Server state: {serverState.gameStage} - {serverState.gameSubStage} -{" "}*/}
         {/*  {serverState.timestamp}*/}
         {/*</Text>*/}
         <ChatArea messages={serverState.messages} act={act}></ChatArea>

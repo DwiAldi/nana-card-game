@@ -33,7 +33,7 @@ const HandArea = ({
               position: "absolute",
               top: isMe && card.isRevealed ? "-32px" : "0",
             }}
-            onClick={() => toastInfo("只可以选择玩家的最大/最小手牌")}
+            onClick={() => toastInfo("You can only select a player's lowest or highest card")}
             cardId={card.id}
             isRevealed={isMe ? true : card.isRevealed}
             w="90px"

@@ -45,7 +45,7 @@ const PlayerArea = ({
         }}
       >
         <Text color="white" fontSize="xl">
-          等待加入
+          Waiting for a player
         </Text>
       </Center>
     );
@@ -92,7 +92,7 @@ const PlayerArea = ({
               })
             }
           >
-            选最小
+            Lowest
           </Button>
           <HandArea isMe={isMe} cards={player.hand}></HandArea>
           <Button
@@ -111,7 +111,7 @@ const PlayerArea = ({
               })
             }
           >
-            选最大
+            Highest
           </Button>
         </HStack>
       )}

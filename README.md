@@ -1,10 +1,12 @@
-# NANA Online Board Game [中文](https://github.com/Cyronlee/nana-card-game/blob/master/README-zh.md)
+# NANA Online Board Game
 
-An online multiplayer card game.
+An English-only online multiplayer card game with a local single-player mode against bots.
 
-![](https://github.com/Cyronlee/nana-card-game/blob/master/public/img/example.png?raw=true)
+Repository: [DwiAldi/nana-card-game](https://github.com/DwiAldi/nana-card-game).
 
-Play by visiting [https://nana.cyron.site](https://nana.cyron.site) with your browser.
+![NANA game screenshot](public/img/example.png)
+
+The upstream demo is available at [https://nana.cyron.site](https://nana.cyron.site).
 
 It supports creating rooms and joining others' rooms.
 
@@ -16,7 +18,7 @@ You are welcome to join in developing more features, and submitting issues to he
 
 - [x] Multiplayer online play
 - [x] Sound effects
-- [ ] Internationalization
+- [x] English-only interface
 - [ ] Adaptation for small screens
 - [ ] Seat layout optimization for different number of players
 - [ ] Scoreboard
@@ -37,6 +39,8 @@ npm run dev
 Visit http://localhost:2333 in your browser.
 
 ## Disclaimer
+
+Based on [Cyronlee/nana-card-game](https://github.com/Cyronlee/nana-card-game). Thanks to the upstream author and contributors for the original game implementation.
 
 This project is solely for the purpose of learning and communication of `NextJS` and `Framer motion`.
 

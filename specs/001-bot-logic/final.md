@@ -1,92 +1,92 @@
-# Bot 逻辑实现方案
+# Bot Logic Implementation Plan
 
-## 1. 概述
+## 1. Overview
 
-本文档描述了 NANA 卡牌游戏中困难级 Bot 的实现方案。Bot 将具备完美记忆和推理能力，追求最大胜率。
+This document describes the implementation plan for hard-mode bots in NANA. Bots will use perfect memory and inference to maximize their win rate.
 
-## 2. 数据结构设计
+## 2. Data Structure Design
 
-### 2.1 设计原则
+### 2.1 Design Principles
 
-采用 **原始数据 + 派生计算** 的设计模式：
+Use a **raw data + derived calculations** design:
 
-- **原始数据**：只存储最基本的事实数据（手牌数组、公共牌数组、收集记录）
-- **派生计算**：通过纯函数计算 knownHeadValue、knownTailValue、excludedNumbers 等
+- **Raw data**: store only fundamental facts (hand arrays, public-card arrays, collection records).
+- **Derived calculations**: compute knownHeadValue, knownTailValue, excludedNumbers, and similar values using pure functions.
 
-这样设计的优点：
+Benefits:
 
-1. **避免数据冗余** - 只维护一份原始数据，不会出现不一致
-2. **单一数据源** - 派生数据通过计算得出，始终正确
-3. **易于维护** - 更新原始数据时不需要同步更新多个字段
-4. **更直观** - 数据结构更接近实际游戏状态
+1. **No redundant data** - maintain one copy of the raw data to avoid inconsistencies.
+2. **Single source of truth** - compute derived data so it stays consistent with the facts.
+3. **Easy maintenance** - updating raw data does not require synchronizing several fields.
+4. **Intuitive representation** - the data structures closely reflect the actual game state.
 
-### 2.2 原始数据结构 (`BotMemory`)
+### 2.2 Raw Data Structure (`BotMemory`)
 
 ```typescript
 // src/lib/bot-logic.ts
 
 /**
- * 牌槽：表示一个位置上的牌，可能已知或未知
+ * A card slot represents a card at a position, with a known or unknown value.
  */
 interface CardSlot {
   cardId: string;
-  number: number | null; // null 表示未知
+  number: number | null; // null means unknown.
 }
 
 /**
- * 玩家手牌记忆：从 bot 视角记录某玩家的手牌
- * 数组已排序（从小到大），已知的牌有 number，未知的牌 number 为 null
+ * A player's hand as remembered from the bot's perspective.
+ * Sorted ascending; known cards have a number, unknown cards have null.
  */
 interface PlayerHandMemory {
   playerId: string;
-  cards: CardSlot[]; // 排序后的手牌槽位
+  cards: CardSlot[]; // Sorted hand slots.
 }
 
 /**
- * Bot 记忆系统 - 只存储原始事实数据
+ * Bot memory stores only raw facts.
  */
 interface BotMemory {
   botId: string;
 
-  // 自己的手牌（完整已知）
+  // The bot's own hand (fully known).
   myHand: CardSlot[];
 
-  // 其他玩家的手牌记忆
+  // Memories of other players' hands.
   otherPlayersHands: Map<string, PlayerHandMemory>;
 
-  // 公共区牌（包含已知和未知）
+  // Public cards, both known and unknown.
   publicCards: CardSlot[];
 
-  // 已收集的三条：playerId -> 收集的数字列表
+  // Collected sets: playerId -> list of collected numbers.
   collectedSets: Map<string, number[]>;
 
-  // 游戏使用的数字范围（根据玩家数量不同）
+  // Number range used in the game, based on player count.
   numberRange: { min: number; max: number };
 }
 ```
 
-### 2.3 派生计算函数
+### 2.3 Derived Calculation Functions
 
 ```typescript
 /**
- * 获取玩家已知的头值（最小端）
- * 如果头牌已被翻开过且未被移除，返回该值；否则返回 null
+ * Get the player's known head value (lowest end).
+ * Return its value if revealed and not yet removed; otherwise null.
  */
 function getKnownHeadValue(memory: BotMemory, playerId: string): number | null;
 
 /**
- * 获取玩家已知的尾值（最大端）
+ * Get the player's known tail value (highest end).
  */
 function getKnownTailValue(memory: BotMemory, playerId: string): number | null;
 
 /**
- * 获取玩家当前手牌数量
+ * Get the player's current hand size.
  */
 function getHandSize(memory: BotMemory, playerId: string): number;
 
 /**
- * 获取某数字在全局的剩余张数
- * 计算方式：3 - 已收集的 - 已知在各位置的
+ * Get the number of copies still unaccounted for globally.
+ * Calculation: 3 minus collected copies minus copies at known locations.
  */
 function getGlobalRemainingCount(
   memory: BotMemory,
@@ -94,18 +94,18 @@ function getGlobalRemainingCount(
 ): number;
 
 /**
- * 获取玩家手牌中已排除的数字集合
- * 基于头尾约束推理：如果头=5，则 1-4 被排除
+ * Get the numbers excluded from a player's hand.
+ * Infer from head/tail constraints: a head of 5 excludes 1 through 4.
  */
 function getExcludedNumbers(memory: BotMemory, playerId: string): Set<number>;
 
 /**
- * 获取公共区未知牌数量
+ * Get the number of unknown public cards.
  */
 function getUnknownPublicCount(memory: BotMemory): number;
 
 /**
- * 获取公共区中某数字的已知张数
+ * Get the number of known public copies of a number.
  */
 function getKnownPublicCountForNumber(
   memory: BotMemory,
@@ -113,22 +113,22 @@ function getKnownPublicCountForNumber(
 ): number;
 ```
 
-### 2.4 Bot 决策结果 (`BotDecision`)
+### 2.4 Bot Decision Result (`BotDecision`)
 
 ```typescript
 interface BotDecision {
   action: "reveal-player-card" | "reveal-public-card";
-  playerId?: string; // 目标玩家ID（翻玩家牌时）
-  minMax?: "min" | "max"; // 翻头还是翻尾
-  cardId?: string; // 公共区牌ID（翻公共牌时）
-  confidence: number; // 决策置信度 0-1
-  reasoning: string; // 决策理由（用于调试）
+  playerId?: string; // Target player ID when revealing a player's card.
+  minMax?: "min" | "max"; // Reveal the head or tail.
+  cardId?: string; // Public card ID when revealing a public card.
+  confidence: number; // Decision confidence from 0 to 1.
+  reasoning: string; // Explanation for debugging.
 }
 ```
 
-## 3. 核心函数设计
+## 3. Core Function Design
 
-### 3.1 记忆初始化
+### 3.1 Memory Initialization
 
 ```typescript
 function initBotMemory(
@@ -140,17 +140,17 @@ function initBotMemory(
 ): BotMemory;
 ```
 
-初始化逻辑：
+Initialization logic:
 
 ```typescript
 function initBotMemory(...): BotMemory {
-  // 1. 自己的手牌：完整已知，转换为 CardSlot[]
+  // 1. Convert the bot's fully known hand to CardSlot[].
   const myHand: CardSlot[] = botHand.map((c) => ({
     cardId: c.id,
-    number: c.number, // 完全已知
+    number: c.number, // Fully known.
   }));
 
-  // 2. 其他玩家的手牌：只知道数量，不知道具体值
+  // 2. Only the size of other players' hands is known, not their values.
   const otherPlayersHands = new Map<string, PlayerHandMemory>();
   for (const player of players) {
     if (player.id !== botId) {
@@ -158,13 +158,13 @@ function initBotMemory(...): BotMemory {
         playerId: player.id,
         cards: player.hand.map((c) => ({
           cardId: c.id,
-          number: null, // 未知
+          number: null, // Unknown.
         })),
       });
     }
   }
 
-  // 3. 公共区牌：初始全部未知
+  // 3. All public cards are initially unknown.
   const publicCardsSlots: CardSlot[] = publicCards.map((c) => ({
     cardId: c.id,
     number: null,
@@ -181,11 +181,11 @@ function initBotMemory(...): BotMemory {
 }
 ```
 
-### 3.2 记忆更新
+### 3.2 Memory Updates
 
 ```typescript
 /**
- * 当牌被翻开时更新记忆
+ * Update memory when a card is revealed.
  */
 function updateMemoryOnReveal(
   memory: BotMemory,
@@ -195,15 +195,15 @@ function updateMemoryOnReveal(
 ): BotMemory;
 ```
 
-更新逻辑：
+Update logic:
 
 ```typescript
 function updateMemoryOnReveal(...): BotMemory {
-  // 创建新的记忆对象（不可变更新）
+  // Create a new memory object for an immutable update.
   const newMemory = { ...memory };
 
   if (source.type === "player") {
-    // 更新对应玩家手牌中的 CardSlot
+    // Update the CardSlot in the corresponding player's hand.
     const playerHand = newMemory.otherPlayersHands.get(source.playerId);
     if (playerHand) {
       const newCards = playerHand.cards.map((slot) =>
@@ -215,7 +215,7 @@ function updateMemoryOnReveal(...): BotMemory {
       });
     }
   } else {
-    // 更新公共区牌
+    // Update the public cards.
     newMemory.publicCards = memory.publicCards.map((slot) =>
       slot.cardId === revealedCardId ? { ...slot, number: revealedNumber } : slot
     );
@@ -225,7 +225,7 @@ function updateMemoryOnReveal(...): BotMemory {
 }
 
 /**
- * 当三条被收集时更新记忆
+ * Update memory when a set of three is collected.
  */
 function updateMemoryOnCollect(
   memory: BotMemory,
@@ -234,22 +234,22 @@ function updateMemoryOnCollect(
 ): BotMemory;
 ```
 
-更新逻辑：
+Update logic:
 
 ```typescript
 function updateMemoryOnCollect(...): BotMemory {
   const newMemory = { ...memory };
 
-  // 1. 记录收集
+  // 1. Record the collected set.
   const newCollectedSets = new Map(memory.collectedSets);
   const existing = newCollectedSets.get(collectorId) || [];
   newCollectedSets.set(collectorId, [...existing, collectedNumber]);
   newMemory.collectedSets = newCollectedSets;
 
-  // 2. 从自己手牌移除
+  // 2. Remove matching cards from our own hand.
   newMemory.myHand = memory.myHand.filter((slot) => slot.number !== collectedNumber);
 
-  // 3. 从其他玩家手牌移除
+  // 3. Remove matching cards from other players' hands.
   const newOtherHands = new Map<string, PlayerHandMemory>();
   for (const [playerId, hand] of memory.otherPlayersHands) {
     newOtherHands.set(playerId, {
@@ -259,7 +259,7 @@ function updateMemoryOnCollect(...): BotMemory {
   }
   newMemory.otherPlayersHands = newOtherHands;
 
-  // 4. 从公共区移除
+  // 4. Remove matching public cards.
   newMemory.publicCards = memory.publicCards.filter(
     (slot) => slot.number !== collectedNumber
   );
@@ -268,17 +268,17 @@ function updateMemoryOnCollect(...): BotMemory {
 }
 ```
 
-### 3.3 派生计算实现
+### 3.3 Derived Calculation Implementation
 
 ```typescript
 function getKnownHeadValue(memory: BotMemory, playerId: string): number | null {
   if (playerId === memory.botId) {
-    // 自己的头值总是已知
+    // Our own head value is always known.
     return memory.myHand[0]?.number ?? null;
   }
   const hand = memory.otherPlayersHands.get(playerId);
   if (!hand || hand.cards.length === 0) return null;
-  // 头牌（第一张）如果已知则返回
+  // Return the head (first card) value if known.
   return hand.cards[0].number;
 }
 
@@ -302,24 +302,24 @@ function getGlobalRemainingCount(
   memory: BotMemory,
   targetNumber: number
 ): number {
-  let remaining = 3; // 每个数字初始3张
+  let remaining = 3; // Each number starts with three copies.
 
-  // 减去已收集的
+  // Subtract collected copies.
   for (const collected of memory.collectedSets.values()) {
     if (collected.includes(targetNumber)) {
-      return 0; // 已被收集，剩余0张
+      return 0; // Already collected; no copies remain.
     }
   }
 
-  // 减去自己手中的
+  // Subtract copies in our own hand.
   remaining -= memory.myHand.filter((s) => s.number === targetNumber).length;
 
-  // 减去其他玩家已知的
+  // Subtract known copies in other players' hands.
   for (const hand of memory.otherPlayersHands.values()) {
     remaining -= hand.cards.filter((s) => s.number === targetNumber).length;
   }
 
-  // 减去公共区已知的
+  // Subtract known public copies.
   remaining -= memory.publicCards.filter(
     (s) => s.number === targetNumber
   ).length;
@@ -332,14 +332,14 @@ function getExcludedNumbers(memory: BotMemory, playerId: string): Set<number> {
   const headValue = getKnownHeadValue(memory, playerId);
   const tailValue = getKnownTailValue(memory, playerId);
 
-  // 如果头值已知，则所有 < 头值的数字被排除
+  // A known head excludes all lower numbers.
   if (headValue !== null) {
     for (let n = memory.numberRange.min; n < headValue; n++) {
       excluded.add(n);
     }
   }
 
-  // 如果尾值已知，则所有 > 尾值的数字被排除
+  // A known tail excludes all higher numbers.
   if (tailValue !== null) {
     for (let n = tailValue + 1; n <= memory.numberRange.max; n++) {
       excluded.add(n);
@@ -350,7 +350,7 @@ function getExcludedNumbers(memory: BotMemory, playerId: string): Set<number> {
 }
 ```
 
-### 3.4 概率计算
+### 3.4 Probability Calculation
 
 ```typescript
 function calculateProbability(
@@ -362,76 +362,76 @@ function calculateProbability(
 ): number;
 ```
 
-计算逻辑：
+Calculation logic:
 
 ```typescript
 function calculateProbability(...): number {
-  // 全局剩余0张，概率为0
+  // No remaining copies globally means zero probability.
   const globalRemaining = getGlobalRemainingCount(memory, targetNumber);
   if (globalRemaining === 0) return 0;
 
   if (source.type === "player") {
     const { playerId, position } = source;
 
-    // 获取已知值
+    // Get the known value.
     const knownValue =
       position === "head"
         ? getKnownHeadValue(memory, playerId)
         : getKnownTailValue(memory, playerId);
 
-    // 已知值：确定性判断
+    // A known value gives a certain result.
     if (knownValue !== null) {
       return knownValue === targetNumber ? 1.0 : 0.0;
     }
 
-    // 未知值：概率估算
+    // Estimate the probability for an unknown value.
     const excluded = getExcludedNumbers(memory, playerId);
     if (excluded.has(targetNumber)) return 0;
 
-    // 简化估算：剩余张数 / 可能的数字范围
+    // Simplified estimate: remaining copies / number of possible values.
     const possibleNumbers =
       memory.numberRange.max - memory.numberRange.min + 1 - excluded.size;
     return Math.min(1, globalRemaining / possibleNumbers);
   } else {
-    // 公共区概率
+    // Public-area probability.
     const unknownCount = memory.publicCards.filter((s) => s.number === null).length;
     if (unknownCount === 0) return 0;
 
-    // 已知在公共区的数量
+    // Copies known to be in the public area.
     const knownInPublic = memory.publicCards.filter(
       (s) => s.number === targetNumber
     ).length;
 
-    // 剩余可能在公共区的数量
+    // Remaining copies that could be in the public area.
     const possibleInPublic = globalRemaining - knownInPublic;
     return possibleInPublic / unknownCount;
   }
 }
 ```
 
-### 3.5 期望收益计算
+### 3.5 Expected Payoff Calculation
 
 ```typescript
 interface ActionCandidate {
   decision: BotDecision;
-  probability: number; // 翻到目标的概率
-  expectedValue: number; // 期望收益
+  probability: number; // Probability of revealing the target.
+  expectedValue: number; // Expected payoff.
 }
 
 function evaluateAllActions(
   memory: BotMemory,
-  currentChain: Card[], // 当前已翻开的牌
+  currentChain: Card[], // Currently revealed cards.
   availableActions: BotDecision[]
 ): ActionCandidate[];
 ```
 
-期望收益计算：
+Expected payoff calculation:
 
-- **空链**：EV = P(翻到有价值数字) × 后续成功期望
-- **1张T**：EV = P(翻到T) × P(找到第三张T|已有两张T)
-- **2张T**：EV = P(翻到T) × 1.0
+- **Empty chain**: EV = P(reveal a valuable number) × expected subsequent success.
+- **One T**: EV = P(reveal T) × P(find the third T | two Ts already revealed).
+- **Two Ts**: EV = P(reveal T) × 1.0.
 
-### 3.6 主决策函数
+### 3.6 Main Decision Function
 
 ```typescript
 function makeBotDecision(
@@ -442,49 +442,49 @@ function makeBotDecision(
 ): BotDecision;
 ```
 
-**决策流程：**
+**Decision process:**
 
 ```
-1. 枚举所有可能的行动
-   - 每个玩家（包括自己）的头/尾（如果有未翻开的牌）
-   - 每张未翻开的公共牌
+1. Enumerate all possible actions
+   - Each player's head/tail, including our own, if unrevealed cards remain
+   - Every unrevealed public card
 
-2. 根据当前链状态决策：
+2. Decide based on the current chain:
 
-   [空链 - flip-1]
-   - 优先翻自己的头牌（已知值，信息优势）
-   - 或寻找已知两处相同值的情况
+   [Empty chain - flip-1]
+   - Prefer our own head card (known value, information advantage)
+   - Or find two known locations with matching values
 
-   [已翻1张T - flip-2]
-   - 寻找第二张T
-   - 优先级：确定性(1.0) > 高概率 > 低概率
-   - 如果最高概率 < 阈值，考虑放弃当前链
+   [One T revealed - flip-2]
+   - Find the second T
+   - Priority: certainty (1.0) > high probability > low probability
+   - If the highest probability is below the threshold, consider abandoning the chain
 
-   [已翻2张T - flip-3]
-   - 寻找第三张T，同上优先级
+   [Two Ts revealed - flip-3]
+   - Find the third T using the same priorities
 
-3. 计算每个行动的期望收益，选择最高者
+3. Calculate each action's expected payoff and choose the highest
 ```
 
-## 4. local-game-store.tsx 集成
+## 4. Integration with local-game-store.tsx
 
-### 4.1 状态扩展
+### 4.1 State Extension
 
 ```typescript
 export interface LocalGameState {
-  // ... 现有字段 ...
+  // ... existing fields ...
 
-  // Bot 记忆存储：每个 bot 维护自己的视角
+  // Bot memories: each bot maintains its own view of the game.
   botMemories: Map<string, BotMemory>;
 }
 ```
 
-### 4.2 需要修改的函数
+### 4.2 Functions to Modify
 
 #### `startGame()`
 
 ```typescript
-// 在创建玩家后初始化所有 bot 的记忆
+// Initialize all bot memories after creating the players.
 const botMemories = new Map<string, BotMemory>();
 const numberRange = getNumberRangeForPlayerCount(totalPlayers);
 
@@ -492,7 +492,7 @@ for (const player of players) {
   if (player.id.startsWith("bot-")) {
     const memory = initBotMemory(
       player.id,
-      player.hand, // bot 自己的手牌（完整已知）
+      player.hand, // The bot's own hand (fully known).
       players,
       publicCards,
       numberRange
@@ -502,41 +502,41 @@ for (const player of players) {
 }
 
 set((state) => {
-  // ... 其他状态更新 ...
+  // ... other state updates ...
   state.botMemories = botMemories;
 });
 ```
 
-#### `revealPlayerCard()` 和 `revealPublicCard()`
+#### `revealPlayerCard()` and `revealPublicCard()`
 
 ```typescript
-// 在牌被翻开后更新所有 bot 的记忆
+// Update all bot memories after a card is revealed.
 set((draft) => {
-  // ... 现有的翻牌逻辑 ...
+  // ... existing reveal logic ...
 
-  // 更新所有 bot 的记忆
+  // Update all bot memories.
   for (const [botId, memory] of draft.botMemories) {
     draft.botMemories.set(
       botId,
       updateMemoryOnReveal(
         memory,
-        card.id, // 被翻开的牌ID
-        card.number, // 翻开后的数字
-        { type: "player", playerId } // 或 { type: "public" }
+        card.id, // ID of the revealed card.
+        card.number, // Revealed number.
+        { type: "player", playerId } // Or { type: "public" }.
       )
     );
   }
 });
 ```
 
-#### `processTurnResult()` - 成功收集时
+#### `processTurnResult()` - On Successful Collection
 
 ```typescript
-// 收集成功后更新所有 bot 的记忆
+// Update all bot memories after a successful collection.
 set((draft) => {
-  // ... 现有的收集逻辑 ...
+  // ... existing collection logic ...
 
-  // 更新所有 bot 的记忆
+  // Update all bot memories.
   for (const [botId, memory] of draft.botMemories) {
     draft.botMemories.set(
       botId,
@@ -562,7 +562,7 @@ executeBotTurn: async () => {
 
   const revealedCards = state.getRevealedCards();
 
-  // 做出决策（使用新的数据结构）
+  // Make a decision using the new data structures.
   const decision = makeBotDecision(
     memory,
     revealedCards,
@@ -570,12 +570,12 @@ executeBotTurn: async () => {
     state.publicCards
   );
 
-  // 调试日志（开发模式）
+  // Debug logging in development mode.
   if (process.env.NODE_ENV === "development") {
     console.log(`[Bot ${currentPlayer.id}] Decision:`, decision.reasoning);
   }
 
-  // 执行决策（带动画延迟）
+  // Execute the decision after an animation delay.
   await new Promise((resolve) => setTimeout(resolve, 800));
 
   if (decision.action === "reveal-player-card" && decision.playerId) {
@@ -586,30 +586,30 @@ executeBotTurn: async () => {
 };
 ```
 
-### 4.3 辅助函数
+### 4.3 Helper Functions
 
 ```typescript
-// 根据玩家数量确定数字范围
+// Determine the number range from the player count.
 function getNumberRangeForPlayerCount(playerCount: number): {
   min: number;
   max: number;
 } {
   switch (playerCount) {
     case 2:
-      return { min: 1, max: 10 }; // 2人局去掉11、12
+      return { min: 1, max: 10 }; // Remove 11 and 12 for two players.
     case 3:
-      return { min: 1, max: 11 }; // 3人局去掉12
+      return { min: 1, max: 11 }; // Remove 12 for three players.
     default:
-      return { min: 1, max: 12 }; // 4-6人使用全部
+      return { min: 1, max: 12 }; // Use all numbers for four to six players.
   }
 }
 ```
 
-## 5. 测试场景
+## 5. Test Scenarios
 
-### 5.1 单元测试 - 记忆初始化与原始数据
+### 5.1 Unit Tests - Memory Initialization and Raw Data
 
-#### 测试文件: `src/lib/__tests__/bot-logic.test.ts`
+#### Test File: `src/lib/__tests__/bot-logic.test.ts`
 
 ```typescript
 describe("BotMemory Initialization", () => {
@@ -620,7 +620,7 @@ describe("BotMemory Initialization", () => {
   ];
   const publicCards = createCards(8);
 
-  test("应正确初始化 bot 自己的手牌（完整已知）", () => {
+  test("initializes the bot's own hand with fully known values", () => {
     const botHand = [
       { id: "2-a", number: 2, isRevealed: false },
       { id: "5-b", number: 5, isRevealed: false },
@@ -637,7 +637,7 @@ describe("BotMemory Initialization", () => {
     expect(memory.myHand[2]).toEqual({ cardId: "8-c", number: 8 });
   });
 
-  test("应正确初始化其他玩家手牌（全部未知）", () => {
+  test("initializes other players' hands with unknown values", () => {
     const memory = initBotMemory("bot-1", botHand, players, publicCards, {
       min: 1,
       max: 12,
@@ -648,7 +648,7 @@ describe("BotMemory Initialization", () => {
     expect(meHand?.cards.every((slot) => slot.number === null)).toBe(true);
   });
 
-  test("应正确初始化公共区牌（全部未知）", () => {
+  test("initializes public cards with unknown values", () => {
     const memory = initBotMemory("bot-1", botHand, players, publicCards, {
       min: 1,
       max: 12,
@@ -660,11 +660,11 @@ describe("BotMemory Initialization", () => {
 });
 ```
 
-### 5.2 单元测试 - 记忆更新
+### 5.2 Unit Tests - Memory Updates
 
 ```typescript
 describe("Memory Update on Reveal", () => {
-  test("翻开玩家牌时应更新对应槽位的 number", () => {
+  test("updates the matching slot when a player's card is revealed", () => {
     let memory = initBotMemory(...);
     const cardId = memory.otherPlayersHands.get("me")?.cards[0].cardId;
 
@@ -673,7 +673,7 @@ describe("Memory Update on Reveal", () => {
     expect(memory.otherPlayersHands.get("me")?.cards[0].number).toBe(3);
   });
 
-  test("翻开公共牌时应更新对应槽位的 number", () => {
+  test("updates the matching slot when a public card is revealed", () => {
     let memory = initBotMemory(...);
     const cardId = memory.publicCards[0].cardId;
 
@@ -682,7 +682,7 @@ describe("Memory Update on Reveal", () => {
     expect(memory.publicCards[0].number).toBe(7);
   });
 
-  test("更新应该是不可变的（返回新对象）", () => {
+  test("updates immutably by returning a new object", () => {
     const memory = initBotMemory(...);
     const newMemory = updateMemoryOnReveal(memory, cardId, 3, { type: "public" });
 
@@ -692,53 +692,53 @@ describe("Memory Update on Reveal", () => {
 });
 
 describe("Memory Update on Collect", () => {
-  test("收集三条后应从所有位置移除该数字的牌", () => {
+  test("removes a collected number from every location", () => {
     let memory = initBotMemory(...);
-    // 假设 memory.myHand 中有一张 5
+    // Assume memory.myHand contains one 5.
     const initialMyHandLength = memory.myHand.length;
 
     memory = updateMemoryOnCollect(memory, "me", 5);
 
-    // 自己手牌中的5被移除
+    // The 5 is removed from its own hand.
     expect(memory.myHand.filter((s) => s.number === 5)).toHaveLength(0);
-    // 收集记录已更新
+    // The collection record is updated.
     expect(memory.collectedSets.get("me")).toContain(5);
   });
 
-  test("收集后其他玩家已知的该数字牌也应被移除", () => {
+  test("removes known copies of a collected number from other players' hands", () => {
     let memory = initBotMemory(...);
-    // 先翻开一张牌使其已知
+    // Reveal a card first so its value is known.
     memory = updateMemoryOnReveal(memory, cardId, 5, { type: "player", playerId: "bot-2" });
 
     memory = updateMemoryOnCollect(memory, "me", 5);
 
-    // bot-2 手牌中已知的5被移除
+    // The known 5 is removed from bot-2's hand.
     const bot2Cards = memory.otherPlayersHands.get("bot-2")?.cards;
     expect(bot2Cards?.find((s) => s.number === 5)).toBeUndefined();
   });
 });
 ```
 
-### 5.3 单元测试 - 派生计算
+### 5.3 Unit Tests - Derived Calculations
 
 ```typescript
 describe("Derived Calculations", () => {
   describe("getKnownHeadValue / getKnownTailValue", () => {
-    test("自己的头尾值总是已知", () => {
+    test("always knows its own head and tail values", () => {
       const memory = initBotMemory("bot-1", botHand, ...);
 
-      expect(getKnownHeadValue(memory, "bot-1")).toBe(2); // 假设最小牌是2
-      expect(getKnownTailValue(memory, "bot-1")).toBe(8); // 假设最大牌是8
+      expect(getKnownHeadValue(memory, "bot-1")).toBe(2); // Assume the lowest card is 2.
+      expect(getKnownTailValue(memory, "bot-1")).toBe(8); // Assume the highest card is 8.
     });
 
-    test("其他玩家未翻牌时头尾值为 null", () => {
+    test("returns null for other players' unrevealed head and tail values", () => {
       const memory = initBotMemory(...);
 
       expect(getKnownHeadValue(memory, "me")).toBeNull();
       expect(getKnownTailValue(memory, "me")).toBeNull();
     });
 
-    test("翻开头牌后 knownHeadValue 应返回该值", () => {
+    test("returns the head value after it is revealed", () => {
       let memory = initBotMemory(...);
       const headCardId = memory.otherPlayersHands.get("me")?.cards[0].cardId;
       memory = updateMemoryOnReveal(memory, headCardId, 3, { type: "player", playerId: "me" });
@@ -748,33 +748,33 @@ describe("Derived Calculations", () => {
   });
 
   describe("getHandSize", () => {
-    test("应返回正确的手牌数量", () => {
+    test("returns the correct hand size", () => {
       const memory = initBotMemory(...);
 
-      expect(getHandSize(memory, "bot-1")).toBe(3); // bot自己
-      expect(getHandSize(memory, "me")).toBe(7); // 其他玩家
+      expect(getHandSize(memory, "bot-1")).toBe(3); // The bot itself.
+      expect(getHandSize(memory, "me")).toBe(7); // Another player.
     });
 
-    test("收集后手牌数量应减少", () => {
+    test("reduces the hand size after collection", () => {
       let memory = initBotMemory(...);
       const before = getHandSize(memory, "bot-1");
 
-      memory = updateMemoryOnCollect(memory, "me", 5); // 假设bot有1张5
+      memory = updateMemoryOnCollect(memory, "me", 5); // Assume the bot has one 5.
 
       expect(getHandSize(memory, "bot-1")).toBe(before - 1);
     });
   });
 
   describe("getGlobalRemainingCount", () => {
-    test("初始时每个数字剩余 3 - 自己手中的数量", () => {
-      // bot手牌：[2, 5, 8]
+    test("initially counts three copies minus those in its own hand", () => {
+      // Bot hand: [2, 5, 8].
       const memory = initBotMemory("bot-1", botHand, ...);
 
       expect(getGlobalRemainingCount(memory, 2)).toBe(2); // 3-1
-      expect(getGlobalRemainingCount(memory, 3)).toBe(3); // 未知位置
+      expect(getGlobalRemainingCount(memory, 3)).toBe(3); // Unknown locations.
     });
 
-    test("收集后该数字剩余为 0", () => {
+    test("returns 0 remaining copies after a number is collected", () => {
       let memory = initBotMemory(...);
       memory = updateMemoryOnCollect(memory, "me", 5);
 
@@ -783,20 +783,20 @@ describe("Derived Calculations", () => {
   });
 
   describe("getExcludedNumbers", () => {
-    test("已知头值后应排除更小的数字", () => {
+    test("excludes numbers below the known head value", () => {
       let memory = initBotMemory(...);
-      // 翻开 me 的头牌，值为5
+      // Reveal me's head card as 5.
       memory = updateMemoryOnReveal(memory, headCardId, 5, { type: "player", playerId: "me" });
 
       const excluded = getExcludedNumbers(memory, "me");
       expect(excluded.has(1)).toBe(true);
       expect(excluded.has(4)).toBe(true);
-      expect(excluded.has(5)).toBe(false); // 5本身不排除
+      expect(excluded.has(5)).toBe(false); // Do not exclude 5 itself.
     });
 
-    test("已知尾值后应排除更大的数字", () => {
+    test("excludes numbers above the known tail value", () => {
       let memory = initBotMemory(...);
-      // 翻开 me 的尾牌，值为9
+      // Reveal me's tail card as 9.
       memory = updateMemoryOnReveal(memory, tailCardId, 9, { type: "player", playerId: "me" });
 
       const excluded = getExcludedNumbers(memory, "me");
@@ -808,11 +808,11 @@ describe("Derived Calculations", () => {
 });
 ```
 
-### 5.4 单元测试 - 概率计算
+### 5.4 Unit Tests - Probability Calculation
 
 ```typescript
 describe("Probability Calculation", () => {
-  test("已知头值等于目标时概率应为 1.0", () => {
+  test("returns probability 1.0 when the known head matches the target", () => {
     let memory = initBotMemory(...);
     memory = updateMemoryOnReveal(memory, headCardId, 3, { type: "player", playerId: "me" });
 
@@ -820,7 +820,7 @@ describe("Probability Calculation", () => {
     expect(prob).toBe(1.0);
   });
 
-  test("已知头值不等于目标时概率应为 0.0", () => {
+  test("returns probability 0.0 when the known head differs from the target", () => {
     let memory = initBotMemory(...);
     memory = updateMemoryOnReveal(memory, headCardId, 3, { type: "player", playerId: "me" });
 
@@ -828,19 +828,19 @@ describe("Probability Calculation", () => {
     expect(prob).toBe(0.0);
   });
 
-  test("公共区概率应正确计算", () => {
+  test("calculates public-area probability correctly", () => {
     let memory = initBotMemory(...);
-    // 公共区8张，翻开1张是7
+    // Of eight public cards, reveal one 7.
     memory = updateMemoryOnReveal(memory, publicCardId, 7, { type: "public" });
-    // bot手中无7，其他位置无已知7
+    // The bot has no 7, and no 7 is known at any other location.
 
-    // 剩余7: 3-1=2张，公共区未知牌: 7张
-    // 但1张7已知在公共区，所以可能在未知公共牌中的7: 2-1=1张
+    // Remaining 7s: 3-1=2; unknown public cards: 7.
+    // One 7 is known in public, so possible 7s among unknown public cards: 2-1=1.
     const prob = calculateProbability(memory, 7, { type: "public" });
     expect(prob).toBeCloseTo(1 / 7, 2);
   });
 
-  test("目标数字已全部收集时概率应为 0", () => {
+  test("returns probability 0 when the target number has been collected", () => {
     let memory = initBotMemory(...);
     memory = updateMemoryOnCollect(memory, "me", 5);
 
@@ -848,9 +848,9 @@ describe("Probability Calculation", () => {
     expect(prob).toBe(0);
   });
 
-  test("目标数字被头尾约束排除时概率应为 0", () => {
+  test("returns probability 0 when head/tail constraints exclude the target", () => {
     let memory = initBotMemory(...);
-    // me 的头值是5，则不可能有1-4
+    // me's head is 5, so its hand cannot contain 1 through 4.
     memory = updateMemoryOnReveal(memory, headCardId, 5, { type: "player", playerId: "me" });
 
     const prob = calculateProbability(memory, 3, { type: "player", playerId: "me", position: "tail" });
@@ -859,38 +859,38 @@ describe("Probability Calculation", () => {
 });
 ```
 
-### 5.5 单元测试 - 决策逻辑
+### 5.5 Unit Tests - Decision Logic
 
 ```typescript
 describe("Bot Decision Making", () => {
-  describe("空链状态 (flip-1)", () => {
-    test("应优先翻自己的头牌作为起点", () => {
+  describe("Empty chain (flip-1)", () => {
+    test("prefers its own head card as a starting point", () => {
       const memory = initBotMemory("bot-1", botHand, players, publicCards, ...);
       const decision = makeBotDecision(memory, [], players, publicCards);
 
       expect(decision.action).toBe("reveal-player-card");
-      expect(decision.playerId).toBe("bot-1"); // 自己
-      expect(decision.minMax).toBe("min"); // 头牌
+      expect(decision.playerId).toBe("bot-1"); // Itself.
+      expect(decision.minMax).toBe("min"); // Head card.
     });
 
-    test("当已知两处有相同数字时应利用这个信息", () => {
+    test("uses knowledge of two locations with the same number", () => {
       let memory = initBotMemory(...);
-      // me 头值=4, bot-2 头值=4
+      // me's head = 4, bot-2's head = 4.
       memory = updateMemoryOnReveal(memory, meHeadId, 4, { type: "player", playerId: "me" });
       memory = updateMemoryOnReveal(memory, bot2HeadId, 4, { type: "player", playerId: "bot-2" });
 
       const decision = makeBotDecision(memory, [], players, publicCards);
 
-      // 应该翻其中一个已知是4的头
+      // Reveal one of the heads known to be 4.
       expect(decision.action).toBe("reveal-player-card");
       expect(["me", "bot-2"]).toContain(decision.playerId);
     });
   });
 
-  describe("已翻1张状态 (flip-2)", () => {
-    test("应优先选择确定性来源", () => {
+  describe("One card revealed (flip-2)", () => {
+    test("prefers a certain source", () => {
       let memory = initBotMemory(...);
-      // me 的尾值已知是6
+      // me's tail is known to be 6.
       memory = updateMemoryOnReveal(memory, meTailId, 6, { type: "player", playerId: "me" });
 
       const currentChain = [{ id: "6-a", number: 6, isRevealed: true }];
@@ -902,7 +902,7 @@ describe("Bot Decision Making", () => {
       expect(decision.confidence).toBe(1.0);
     });
 
-    test("无确定性来源时应选择最高概率来源", () => {
+    test("chooses the highest-probability source when no source is certain", () => {
       const memory = initBotMemory(...);
       const currentChain = [{ id: "8-a", number: 8, isRevealed: true }];
       const decision = makeBotDecision(memory, currentChain, players, publicCards);
@@ -912,9 +912,9 @@ describe("Bot Decision Making", () => {
     });
   });
 
-  describe("已翻2张状态 (flip-3)", () => {
-    test("有确定性第三张时应立即选择", () => {
-      // bot手牌中有5
+  describe("Two cards revealed (flip-3)", () => {
+    test("immediately selects a certain third card", () => {
+      // The bot has a 5 in its hand.
       const botHand = [
         { id: "3-a", number: 3 },
         { id: "5-c", number: 5 },
@@ -928,14 +928,14 @@ describe("Bot Decision Making", () => {
       ];
       const decision = makeBotDecision(memory, currentChain, players, publicCards);
 
-      // bot知道自己有5，应该翻自己的牌
+      // The bot knows it has a 5 and should reveal its own card.
       expect(decision.action).toBe("reveal-player-card");
       expect(decision.playerId).toBe("bot-1");
     });
 
-    test("应避免翻已知不匹配的来源", () => {
+    test("avoids revealing known mismatches", () => {
       let memory = initBotMemory(...);
-      // me 的头值已知是3
+      // me's head is known to be 3.
       memory = updateMemoryOnReveal(memory, meHeadId, 3, { type: "player", playerId: "me" });
 
       const currentChain = [
@@ -944,7 +944,7 @@ describe("Bot Decision Making", () => {
       ];
       const decision = makeBotDecision(memory, currentChain, players, publicCards);
 
-      // 不应该选择已知是3的头
+      // Do not choose the head known to be 3.
       if (decision.action === "reveal-player-card" && decision.playerId === "me") {
         expect(decision.minMax).not.toBe("min");
       }
@@ -953,19 +953,19 @@ describe("Bot Decision Making", () => {
 });
 ```
 
-### 5.6 集成测试 - 游戏流程
+### 5.6 Integration Tests - Game Flow
 
 ```typescript
 describe("Bot Game Flow Integration", () => {
-  test("Bot 应能完成一个完整回合", async () => {
+  test("the bot can complete a full turn", async () => {
     const store = useLocalGameStore.getState();
     store.setBotCount(1);
     store.startGame();
 
-    // 模拟轮到 bot
+    // Simulate the start of the bot's turn.
     store.nextTurn();
 
-    // 等待 bot 执行
+    // Wait for the bot to act.
     await waitFor(
       () => {
         const state = useLocalGameStore.getState();
@@ -974,23 +974,23 @@ describe("Bot Game Flow Integration", () => {
       { timeout: 5000 }
     );
 
-    // 验证游戏状态仍然有效
+    // Verify that the game state remains valid.
     const finalState = useLocalGameStore.getState();
     expect(finalState.gameStage).toBe("in-game");
   });
 
-  test("Bot 记忆应在游戏过程中正确更新", async () => {
+  test("bot memory updates correctly during play", async () => {
     const store = useLocalGameStore.getState();
     store.setBotCount(2);
     store.startGame();
 
-    // 人类玩家翻一张牌
+    // The human player reveals a card.
     store.revealPlayerCard("me", "min");
 
     await waitFor(() => {
       const state = useLocalGameStore.getState();
       const bot1Memory = state.botMemories.get("bot-1");
-      // 检查 me 的头牌槽位是否已更新
+      // Check whether me's head slot has been updated.
       const meHand = bot1Memory?.otherPlayersHands.get("me");
       return meHand?.cards[0].number !== null;
     });
@@ -1001,43 +1001,43 @@ describe("Bot Game Flow Integration", () => {
     expect(meHeadValue).not.toBeNull();
   });
 
-  test("Bot 成功收集三条后应继续回合", async () => {
+  test("the bot continues its turn after collecting a set of three", async () => {
     const store = useLocalGameStore.getState();
-    // ... 设置特定游戏状态（确保 bot 能成功）...
+    // ... set up a specific game state that guarantees bot success ...
 
     await store.executeBotTurn();
 
     const state = useLocalGameStore.getState();
     if (state.turnPhase === "flip-1") {
-      // Bot 成功并继续
+      // The bot succeeded and continues its turn.
       expect(state.isCurrentPlayerBot()).toBe(true);
     }
   });
 });
 ```
 
-### 5.7 边界情况测试
+### 5.7 Edge Case Tests
 
 ```typescript
 describe("Edge Cases", () => {
-  test("当某数字只剩1张时不应以此为目标", () => {
-    // bot 手中有 [3]，全局3只剩1张（不可能凑三条）
+  test("does not target a number with only one remaining copy", () => {
+    // The bot holds [3]; only one 3 remains globally, so a set is impossible.
     const botHand = [{ id: "3-a", number: 3, isRevealed: false }];
     const memory = initBotMemory("bot-1", botHand, players, publicCards, ...);
 
-    // getGlobalRemainingCount 应返回正确值
+    // getGlobalRemainingCount should return the correct value.
     expect(getGlobalRemainingCount(memory, 3)).toBe(2); // 3-1=2
 
-    // 假设其他玩家收集了一套3
+    // Assume another player collects a set of 3s.
     const memory2 = updateMemoryOnCollect(memory, "me", 3);
     expect(getGlobalRemainingCount(memory2, 3)).toBe(0);
 
-    // 决策时不应选择3作为目标
+    // The decision should not target 3.
     const decision = makeBotDecision(memory2, [], players, publicCards);
-    // ... 验证不会尝试翻3 ...
+    // ... verify that it does not try to reveal a 3 ...
   });
 
-  test("手牌有重复数字时应正确处理", () => {
+  test("handles duplicate numbers in a hand correctly", () => {
     const botHand = [
       { id: "3-a", number: 3, isRevealed: false },
       { id: "3-b", number: 3, isRevealed: false },
@@ -1045,18 +1045,18 @@ describe("Edge Cases", () => {
     ];
     const memory = initBotMemory("bot-1", botHand, players, publicCards, ...);
 
-    // 手牌应正确记录
+    // The hand should be recorded correctly.
     expect(memory.myHand).toHaveLength(3);
     expect(memory.myHand[0].number).toBe(3);
     expect(memory.myHand[1].number).toBe(3);
 
-    // 头尾值应正确
+    // Head and tail values should be correct.
     expect(getKnownHeadValue(memory, "bot-1")).toBe(3);
     expect(getKnownTailValue(memory, "bot-1")).toBe(5);
   });
 
-  test("所有玩家手牌为空时应只翻公共牌", () => {
-    // 创建一个手牌全为空的情况
+  test("only reveals public cards when every player's hand is empty", () => {
+    // Create a state in which all hands are empty.
     const emptyPlayers = players.map((p) => ({ ...p, hand: [] }));
     const memory = initBotMemory("bot-1", [], emptyPlayers, publicCards, ...);
 
@@ -1065,7 +1065,7 @@ describe("Edge Cases", () => {
     expect(decision.action).toBe("reveal-public-card");
   });
 
-  test("公共区为空时应只翻玩家牌", () => {
+  test("only reveals players' cards when the public area is empty", () => {
     const memory = initBotMemory("bot-1", botHand, players, [], ...);
 
     const decision = makeBotDecision(memory, [], players, []);
@@ -1073,78 +1073,78 @@ describe("Edge Cases", () => {
     expect(decision.action).toBe("reveal-player-card");
   });
 
-  test("头牌被移除后下一张成为新的头", () => {
+  test("uses the next card as the new head after removing the old head", () => {
     let memory = initBotMemory(...);
-    // 翻开 me 的头牌是3
+    // Reveal me's head card as 3.
     memory = updateMemoryOnReveal(memory, meHeadId, 3, { type: "player", playerId: "me" });
     expect(getKnownHeadValue(memory, "me")).toBe(3);
 
-    // 收集3
+    // Collect the 3s.
     memory = updateMemoryOnCollect(memory, "someone", 3);
 
-    // 头牌被移除，新头未知
+    // The old head is removed and the new head is unknown.
     expect(getKnownHeadValue(memory, "me")).toBeNull();
   });
 });
 ```
 
-## 6. 实现步骤
+## 6. Implementation Steps
 
-### Phase 1: 基础数据结构 (bot-logic.ts)
+### Phase 1: Basic Data Structures (bot-logic.ts)
 
-1. 定义 `BotMemory`、`PlayerKnowledge`、`BotDecision` 接口
-2. 实现 `initBotMemory()` 函数
-3. 编写对应的单元测试
+1. Define the `BotMemory`, `PlayerKnowledge`, and `BotDecision` interfaces.
+2. Implement `initBotMemory()`.
+3. Write the corresponding unit tests.
 
-### Phase 2: 记忆更新逻辑 (bot-logic.ts)
+### Phase 2: Memory Update Logic (bot-logic.ts)
 
-1. 实现 `updateMemoryOnReveal()` 函数
-2. 实现 `updateMemoryOnCollect()` 函数
-3. 实现约束推理逻辑（头尾约束、排除数字）
-4. 编写对应的单元测试
+1. Implement `updateMemoryOnReveal()`.
+2. Implement `updateMemoryOnCollect()`.
+3. Implement constraint inference (head/tail constraints and excluded numbers).
+4. Write the corresponding unit tests.
 
-### Phase 3: 概率计算 (bot-logic.ts)
+### Phase 3: Probability Calculation (bot-logic.ts)
 
-1. 实现 `calculateProbability()` 函数
-2. 实现公共区概率计算
-3. 实现玩家端概率计算（考虑约束）
-4. 编写对应的单元测试
+1. Implement `calculateProbability()`.
+2. Implement public-area probability calculations.
+3. Implement player-end probability calculations with constraints.
+4. Write the corresponding unit tests.
 
-### Phase 4: 决策引擎 (bot-logic.ts)
+### Phase 4: Decision Engine (bot-logic.ts)
 
-1. 实现 `evaluateAction()` 期望收益计算
-2. 实现 `makeBotDecision()` 主决策函数
-3. 实现各优先级策略
-4. 编写对应的单元测试
+1. Implement expected payoff calculation in `evaluateAction()`.
+2. Implement the main decision function, `makeBotDecision()`.
+3. Implement the strategies at each priority level.
+4. Write the corresponding unit tests.
 
-### Phase 5: Store 集成 (local-game-store.tsx)
+### Phase 5: Store Integration (local-game-store.tsx)
 
-1. 添加 `botMemories` 到状态
-2. 修改 `startGame()` 初始化记忆
-3. 修改 `revealPlayerCard()` 和 `revealPublicCard()` 更新记忆
-4. 修改 `processTurnResult()` 在收集时更新记忆
-5. 完善 `executeBotTurn()` 调用决策逻辑
-6. 编写集成测试
+1. Add `botMemories` to the state.
+2. Update `startGame()` to initialize memory.
+3. Update `revealPlayerCard()` and `revealPublicCard()` to update memory.
+4. Update `processTurnResult()` to update memory on collection.
+5. Complete `executeBotTurn()` by calling the decision logic.
+6. Write integration tests.
 
-### Phase 6: 调优与完善
+### Phase 6: Tuning and Completion
 
-1. 添加决策日志输出（开发模式）
-2. 性能优化（如果需要）
-3. 边界情况处理
-4. 端到端测试
+1. Add decision logging in development mode.
+2. Optimize performance if needed.
+3. Handle edge cases.
+4. Run end-to-end tests.
 
-## 7. 注意事项
+## 7. Considerations
 
-1. **不可变数据**: 使用 Immer 确保状态更新的不可变性
-2. **Map/Set 支持**: 已启用 `enableMapSet()`，可以在 Immer 中使用
-3. **异步处理**: Bot 决策需要适当的延迟以便用户能看到动画
-4. **内存管理**: 翻牌历史可能需要限制长度或在游戏结束时清理
-5. **概率计算精度**: 使用适当的数值精度，避免浮点数比较问题
+1. **Immutable data**: use Immer to ensure immutable state updates.
+2. **Map/Set support**: `enableMapSet()` is already enabled, allowing their use with Immer.
+3. **Asynchronous handling**: delay bot actions appropriately so users can see the animations.
+4. **Memory management**: reveal history may need a length limit or cleanup when the game ends.
+5. **Probability precision**: use appropriate numeric precision to avoid floating-point comparison issues.
 
-## 8. 导出接口
+## 8. Exported Interface
 
 ```typescript
-// src/lib/bot-logic.ts 导出
+// Exports from src/lib/bot-logic.ts
 
 export {
   // Types
@@ -1174,21 +1174,21 @@ export {
 };
 ```
 
-## 9. 设计总结
+## 9. Design Summary
 
-### 数据流
+### Data Flow
 
 ```
-游戏事件 → updateMemoryOnReveal / updateMemoryOnCollect → 更新原始数据
+Game event → updateMemoryOnReveal / updateMemoryOnCollect → Update raw data
                                                               ↓
-                                         派生计算函数（getKnownHeadValue 等）
+                                         Derived calculations (getKnownHeadValue, etc.)
                                                               ↓
                                            calculateProbability → makeBotDecision
 ```
 
-### 优势
+### Benefits
 
-1. **数据一致性**：只有一份原始数据，派生数据通过计算得出，不会不一致
-2. **易于调试**：可以直接查看原始数据结构，理解 bot 的"视角"
-3. **易于测试**：派生计算是纯函数，易于单元测试
-4. **易于扩展**：添加新的派生计算不需要修改数据结构
+1. **Data consistency**: one copy of raw data, with computed derived values, avoids inconsistencies.
+2. **Easy debugging**: inspect the raw data structures directly to understand the bot's perspective.
+3. **Easy testing**: derived calculations are pure functions that are straightforward to unit-test.
+4. **Easy extension**: add derived calculations without changing the data structures.

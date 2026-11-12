@@ -26,7 +26,7 @@ const CollectionArea = ({ cards }: { cards: Card[] }) => {
         height: "-webkit-fill-available",
       }}
     >
-      {cards.length > 0 && <Text color="white">已收集:</Text>}
+      {cards.length > 0 && <Text color="white">Collected:</Text>}
       {Object.keys(groupedCards).map((key) => (
         <Box h="64px" w="45px" key={key}>
           {groupedCards[key].map((c, i) => (
