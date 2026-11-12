@@ -36,6 +36,12 @@ Commits `2f79a29` and `16594c2` removed the Chinese locale, language selector, C
 
 The TypeScript failures from initial triage remained and are assigned to the framework modernization stage.
 
+### Framework tooling compatibility
+
+The application uses Next.js 16.4.6 with `output: "standalone"` for the Docker runtime image. ESLint is pinned to 9.39.5 rather than the newer 10.x release because the plugins bundled by `eslint-config-next` 16.4.6 cap their peer ranges at ESLint 9. Version 9.39.5 is therefore the latest compatible stable release; the lockfile is installed without peer overrides, `--force`, or `--legacy-peer-deps`.
+
+TypeScript runs in the documented side-by-side transition configuration. The active `tsc` executable is TypeScript 7.0.2, provided by the `@typescript/native` npm alias. `require("typescript")` resolves through `@typescript/typescript6` 6.0.2 (whose compatibility API reports version 6.0.3) so ESLint and other tools that still require the TypeScript compiler API remain compatible. This arrangement is temporary until the lint toolchain supports the TypeScript 7 API, and the active compiler version is verified during release checks.
+
 ### Runtime image preflight
 
 Both official images were pulled successfully and their binaries executed:
