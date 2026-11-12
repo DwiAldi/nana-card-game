@@ -42,6 +42,20 @@ The application uses Next.js 16.4.6 with `output: "standalone"` for the Docker r
 
 TypeScript runs in the documented side-by-side transition configuration. The active `tsc` executable is TypeScript 7.0.2, provided by the `@typescript/native` npm alias. `require("typescript")` resolves through `@typescript/typescript6` 6.0.2 (whose compatibility API reports version 6.0.3) so ESLint and other tools that still require the TypeScript compiler API remain compatible. This arrangement is temporary until the lint toolchain supports the TypeScript 7 API, and the active compiler version is verified during release checks.
 
+### Framework and dependency modernization
+
+Commits `6cc5174`, `80b00a5`, and `82da0b9` upgraded every retained direct dependency to current stable and restored strict checks:
+
+- Next.js 16.4.6, React/React-DOM 19.3.1, Chakra UI 3.38.0, Redis client 6.3.1, Zustand 5.1.0, TypeScript 7.0.2 (active `tsc`), Vitest 5.1.0, ESLint 9.39.5 (documented peer-compatible exception above).
+- Node pinned to 26.13.1 LTS via `.nvmrc` and `engines`.
+- Suppressed TypeScript and lint checking removed; `npm run lint` runs with `--max-warnings=0` and `npm run typecheck` runs `next typegen && tsc --noEmit` — both pass with zero warnings/errors.
+- `npm outdated --json` returns no entries except the documented ESLint 9→10 compatibility exception.
+- `npm ci` and `npm ls --all` complete cleanly with no invalid peers, force flags, or peer overrides.
+- Migration regressions found by review (Chakra 3 gradient syntax, stale room-ID state on client-side query navigation, reset-timer cleanup, missing hook lifecycle tests) were fixed in `82da0b9`, adding a `useJoinRoomId` hook and expanding tests with `@testing-library/react` + `happy-dom`.
+- Tests: 60 of 60 passed; lint, typecheck, and production build all pass under Node 26.13.1.
+
+Audit at this checkpoint: 1 high and 8 moderate findings, all transitive/tooling (`typescript-eslint` chain, `lodash`, `minimatch`, `@babel/runtime`). Resolving or formally documenting the high finding remains a final-release blocker.
+
 ### Runtime image preflight
 
 Both official images were pulled successfully and their binaries executed:
