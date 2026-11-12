@@ -44,6 +44,44 @@ export interface Action {
   };
 }
 
+/**
+ * Public card projection for networked play.
+ *
+ * Hidden cards expose only their opaque id; a card's number is present if
+ * and only if the card is revealed. Opaque ids are unrelated to card values,
+ * so a hidden card's value can never be derived from its id.
+ */
+export type PublicCard =
+  | { id: string; isRevealed: false }
+  | { id: string; isRevealed: true; number: number };
+
+export interface PublicPlayer {
+  id: string;
+  name: string;
+  seat: number;
+  isHost: boolean;
+  isWinner: boolean;
+  isPlaying: boolean;
+  hand: PublicCard[];
+  collection: PublicCard[];
+}
+
+/**
+ * The serialized game state sent to a browser. Contains no deck order, no
+ * session material and no hidden card values; `viewerId` says whose view
+ * this projection belongs to.
+ */
+export interface PublicGameState {
+  gameId: string;
+  gameStage: GameStagePrefix;
+  gameSubStage?: SubStagePrefix | null;
+  timestamp: number;
+  viewerId: string;
+  players: PublicPlayer[];
+  publicCards: PublicCard[];
+  messages: Message[];
+}
+
 export interface LocalPlayerInfo {
   id: string;
   name: string;

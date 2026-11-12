@@ -59,18 +59,32 @@ export function challengeSuccess(cards: Card[]): boolean {
   );
 }
 
+/**
+ * Numeric comparators for card ordering.
+ *
+ * Hands must be ordered by card value so "min"/"max" means lowest/highest
+ * number. Server deck cards carry unpredictable opaque ids, so ordering by
+ * id would be arbitrary and could silently leak nothing but also select the
+ * wrong card; these comparators sort by number first and use the id only as
+ * a stable tiebreak between duplicate values.
+ */
+export const sortByNumberAsc = (a: Card, b: Card): number =>
+  a.number - b.number ||
+  a.id.localeCompare(b.id, undefined, { numeric: true });
+
+export const sortByNumberDesc = (a: Card, b: Card): number => sortByNumberAsc(b, a);
+
 export function findUnrevealedCardId(
   cards: Card[] | undefined,
   minMax: string | "max" | "min",
 ): string | undefined {
   if (!cards) return undefined;
-  const sortedCards = [...cards].filter((c) => !c.isRevealed);
-  if (minMax === "min") {
-    sortedCards.sort(sortByIdAsc);
-  } else {
-    sortedCards.sort(sortByIdDesc);
-  }
-  return sortedCards.find((c) => !c.isRevealed)?.id;
+  const unrevealed = cards.filter((c) => !c.isRevealed);
+  if (unrevealed.length === 0) return undefined;
+  const sorted = [...unrevealed].sort(
+    minMax === "min" ? sortByNumberAsc : sortByNumberDesc,
+  );
+  return sorted[0]?.id;
 }
 
 export function getCurrentAndNextPlayer(players: Player[]): Player[] {
