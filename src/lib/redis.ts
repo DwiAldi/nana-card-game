@@ -97,6 +97,15 @@ function markTerminal(client: RedisClientType): void {
   waiters.clear();
 }
 
+/** Finite reconnect delay shared by base and isolated clients. */
+function reconnectDelay(retries: number): number | false {
+  if (retries >= REDIS_MAX_RECONNECT_ATTEMPTS) return false;
+  return Math.min(
+    REDIS_RECONNECT_BASE_DELAY_MS * 2 ** retries,
+    REDIS_RECONNECT_MAX_DELAY_MS,
+  );
+}
+
 /**
  * Reads the configured Redis URL.
  *
@@ -124,14 +133,11 @@ function getBaseClient(): RedisClientType {
     socket: {
       connectTimeout: REDIS_CONNECT_TIMEOUT_MS,
       reconnectStrategy: (retries: number) => {
-        if (retries >= REDIS_MAX_RECONNECT_ATTEMPTS) {
+        const delay = reconnectDelay(retries);
+        if (delay === false) {
           markTerminal(client);
-          return false;
         }
-        return Math.min(
-          REDIS_RECONNECT_BASE_DELAY_MS * 2 ** retries,
-          REDIS_RECONNECT_MAX_DELAY_MS,
-        );
+        return delay;
       },
     },
     commandOptions: { timeout: REDIS_COMMAND_TIMEOUT_MS },
@@ -235,7 +241,16 @@ export interface IsolatedRedisConnection {
  * `finally` block) so the socket and its watch are always cleaned up.
  */
 export async function createIsolatedConnection(): Promise<IsolatedRedisConnection> {
-  const client = getBaseClient().duplicate();
+  // `duplicate()` inherits the base client's option callbacks. Override the
+  // reconnect strategy so an isolated transaction exhausting its own retry
+  // budget can never mark the shared client terminal through the base
+  // strategy's closure.
+  const client = getBaseClient().duplicate({
+    socket: {
+      connectTimeout: REDIS_CONNECT_TIMEOUT_MS,
+      reconnectStrategy: reconnectDelay,
+    },
+  });
   attachErrorListener(client);
 
   try {

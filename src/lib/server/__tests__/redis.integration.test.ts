@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createClient, type RedisClientType } from "redis";
-import { closeRedis } from "@/lib/redis";
+import { closeRedis, createIsolatedConnection, getRedis } from "@/lib/redis";
 import { RedisGameRepository } from "@/lib/server/game-repository";
 import {
   ConflictError,
@@ -73,6 +73,21 @@ const gameKey = (roomId: string): string => `${KEY_PREFIX}game:${roomId}`;
 
 const ttlOf = (roomId: string): Promise<number> => admin.pTTL(gameKey(roomId));
 
+async function waitForTtlAtMost(
+  roomId: string,
+  maximum: number,
+  deadlineMs = 5_000,
+): Promise<number> {
+  const deadline = Date.now() + deadlineMs;
+  let ttl = await ttlOf(roomId);
+  while (ttl > maximum && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    ttl = await ttlOf(roomId);
+  }
+  if (ttl > maximum) throw new Error("Redis TTL did not decrease before the deadline");
+  return ttl;
+}
+
 const revealedCards = (state: ServerState | null) =>
   (state?.players ?? []).flatMap((player) => player.hand).filter((card) => card.isRevealed);
 
@@ -113,6 +128,34 @@ afterAll(async () => {
 });
 
 describeWithRedis("redis game repository", () => {
+  it("does not mark the shared client terminal when an isolated reconnect exhausts", async () => {
+    const shared = await getRedis();
+    const isolated = await createIsolatedConnection();
+    try {
+      const reconnectStrategy = isolated.client.options.socket?.reconnectStrategy;
+      expect(typeof reconnectStrategy).toBe("function");
+      if (typeof reconnectStrategy !== "function") throw new Error("Missing reconnect strategy");
+
+      expect(reconnectStrategy(5, new Error("isolated connection failed"))).toBe(false);
+
+      // Put the shared client into a real, temporary reconnect. If the
+      // isolated strategy accidentally marked it terminal, getRedis will
+      // destroy it instead of waiting for this same client to recover.
+      const sharedId = await shared.clientId();
+      const reconnecting = new Promise<void>((resolve) => {
+        shared.once("reconnecting", resolve);
+      });
+      await admin.sendCommand(["CLIENT", "KILL", "ID", String(sharedId)]);
+      await reconnecting;
+
+      const sharedAfterIsolatedFailure = await getRedis();
+      expect(sharedAfterIsolatedFailure).toBe(shared);
+      await expect(sharedAfterIsolatedFailure.ping()).resolves.toBe("PONG");
+    } finally {
+      await isolated.release();
+    }
+  });
+
   const expectStorageFailure = async (operation: Promise<unknown>): Promise<void> => {
     const error = await operation.catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(ApiError);
@@ -226,7 +269,7 @@ describeWithRedis("redis game repository", () => {
     const roomId = created.gameId;
 
     const ttlBefore = await ttlOf(roomId);
-    await sleep(1_200);
+    const ttlBeforeRead = await waitForTtlAtMost(roomId, ttlBefore - 800);
 
     const read = await repository.readGame(roomId);
     expect(read?.gameId).toBe(roomId);
@@ -236,8 +279,8 @@ describeWithRedis("redis game repository", () => {
     const ttlAfter = await ttlOf(roomId);
     expect(ttlAfter).toBeGreaterThan(0);
     // Reading must never refresh the expiry, so the remaining time can only
-    // have shrunk.
-    expect(ttlAfter).toBeLessThan(ttlBefore);
+    // have shrunk from the value immediately before the reads.
+    expect(ttlAfter).toBeLessThanOrEqual(ttlBeforeRead);
   });
 
   it("does not write or refresh the expiry for an identical update", async () => {
@@ -247,14 +290,14 @@ describeWithRedis("redis game repository", () => {
     });
     const roomId = created.gameId;
     const ttlBefore = await ttlOf(roomId);
-    await sleep(1_200);
+    const ttlBeforeUpdate = await waitForTtlAtMost(roomId, ttlBefore - 800);
 
     const returned = await repository.updateGame(roomId, (state) => structuredClone(state));
     expect(returned).toEqual(created);
 
     const ttlAfter = await ttlOf(roomId);
     expect(ttlAfter).toBeGreaterThan(0);
-    expect(ttlAfter).toBeLessThan(ttlBefore - 800);
+    expect(ttlAfter).toBeLessThanOrEqual(ttlBeforeUpdate);
   });
 
   it("keeps only the newest 100 chat messages", async () => {
@@ -486,6 +529,23 @@ describeWithRedis("redis game repository", () => {
     ).rejects.toThrow(/next game state/);
 
     expect(await repository.readGame(roomId)).toEqual(before);
+  });
+
+  it("rejects a revealed empty public-card slot and preserves the room", async () => {
+    const created = await repository.createGame({
+      hostPlayerId: HOST_ID,
+      hostName: "Host",
+    });
+    const roomId = created.gameId;
+
+    await expect(
+      repository.updateGame(roomId, (state) => ({
+        ...state,
+        publicCards: [{ id: "", number: 1, isRevealed: true }],
+      })),
+    ).rejects.toThrow(/next game state/);
+
+    expect(await repository.readGame(roomId)).toEqual(created);
   });
 
   it.each([

@@ -187,7 +187,8 @@ function normalizeCard(value: unknown, allowEmptySlot: boolean): Card | null {
     !isPlainRecord(value) ||
     !hasOnlyKeys(value, ["id", "number", "isRevealed"]) ||
     typeof value.id !== "string" ||
-    (!CARD_ID_PATTERN.test(value.id) && !(allowEmptySlot && value.id === "")) ||
+    (!CARD_ID_PATTERN.test(value.id) &&
+      !(allowEmptySlot && value.id === "" && value.isRevealed === false)) ||
     !Number.isSafeInteger(value.number) ||
     Number(value.number) < 1 ||
     Number(value.number) > 12 ||
