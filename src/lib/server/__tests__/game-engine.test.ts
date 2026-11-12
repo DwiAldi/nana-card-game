@@ -360,6 +360,22 @@ describe("reveal-public", () => {
     expect(next.gameSubStage).toBe("sub:playing");
   });
 
+  it("does not mutate a reveal action while selecting its target", () => {
+    const state = inGameState({
+      hands: { [P2]: [card("a", 9), card("b", 2)] },
+    });
+    const action = {
+      type: "reveal-player",
+      targetPlayerId: P2,
+      minMax: "min",
+    } as const;
+    const before = JSON.stringify(action);
+
+    applyGameAction(state, action, P1, NOW);
+
+    expect(JSON.stringify(action)).toBe(before);
+  });
+
   it("sorts min and max by numeric value, never by opaque id", () => {
     const state = inGameState({
       hands: { [P2]: [card("aaa", 9), card("zzz", 2)] },

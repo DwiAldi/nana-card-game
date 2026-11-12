@@ -264,9 +264,6 @@ export function applyGameAction(
       if (action.selectedCardId !== undefined && cardId !== action.selectedCardId) {
         throw new ConflictError("The selected card changed, please try again");
       }
-      if (action.selectedCardId === undefined && cardId !== undefined) {
-        action.selectedCardId = cardId;
-      }
       const targetCard = cardId
         ? target.hand.find((c) => c.id === cardId)
         : undefined;

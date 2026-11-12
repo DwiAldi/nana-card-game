@@ -16,6 +16,7 @@ import {
 } from "./session";
 import { parseActionInput, validateRoomId, type ActionRequest } from "./validation";
 import { toPublicState } from "./public-state";
+import { findUnrevealedCardId } from "../game-helper";
 
 export interface GameApiDependencies {
   readonly config: ServerConfig;
@@ -134,9 +135,22 @@ export function createGameApi(deps: GameApiDependencies): GameApi {
       if (actionLimit) return actionLimit;
       const roomId = input.roomId;
       const engineAction = toEngineAction(input);
-      const state = await deps.repository.updateGame(roomId, (current) =>
-        applyGameAction(current, engineAction, session.playerId, now()),
-      );
+      let selectedCardId: string | undefined;
+      const state = await deps.repository.updateGame(roomId, (current) => {
+        let actionForAttempt = engineAction;
+        if (engineAction.type === "reveal-player") {
+          if (selectedCardId === undefined) {
+            const target = current.players.find(
+              (player) => player.id === engineAction.targetPlayerId,
+            );
+            selectedCardId = target
+              ? findUnrevealedCardId(target.hand, engineAction.minMax)
+              : undefined;
+          }
+          actionForAttempt = { ...engineAction, selectedCardId };
+        }
+        return applyGameAction(current, actionForAttempt, session.playerId, now());
+      });
       return jsonNoStore(toPublicState(state, session.playerId));
     } catch (error: unknown) {
       return toErrorResponse(error);
