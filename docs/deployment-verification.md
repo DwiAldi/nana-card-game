@@ -24,7 +24,10 @@ Sources:
 
 ## Release status
 
-Implementation and release verification are in progress. No production deployment has been performed, and no readiness claim is made yet.
+The verified revision is ready for a controlled Docker/VPS deployment using
+`docs/deployment.md`. No production deployment has been performed. This is a
+readiness assessment based on the checks below, not a guarantee of absolute
+security.
 
 ### English-only conversion
 
@@ -177,3 +180,60 @@ Commit `ccfad7b` added GitHub Actions CI and weekly Dependabot maintenance:
 - Dependabot checks npm, GitHub Actions, and Docker weekly. Compatible minor/patch updates are grouped, while major upgrades remain separately visible.
 
 Pre-commit validation: both files passed Prettier parsing and PyYAML loading; a script confirmed every `uses:` reference is a 40-character SHA and the least-privilege permission is present. The underlying lint, typecheck, tests, application build, and container build passed locally. Both audit commands were run and failed as intended on the unresolved lodash high advisory; production reported one high and one moderate, while the full tree reported one high and nine moderate. Resolving that blocker belongs to stage 10. No remote workflow run is claimed.
+
+### Final release verification (stage 10)
+
+Commit `a0fdcba` updated compatible transitive dependencies to
+`lodash@4.18.1` and `@babel/runtime@7.29.14`, eliminating the production high
+and moderate advisories without force flags or peer overrides. It also updated
+the newly published direct releases `framer-motion@14.13.0` and
+`prettier@3.10.1`.
+
+Release checks were run from a clean builder image created by the production
+Dockerfile:
+
+- Runtime: Node `v26.13.1`, npm `11.20.0`, active `tsc` `7.0.2`.
+- Fresh `npm ci`: 540 packages installed from the lockfile without peer
+  overrides. `npm ls --depth=0` reported the complete direct tree with no
+  missing or invalid dependency.
+- `npm outdated --json`: only ESLint 9.39.5 remained behind ESLint 10.14.0;
+  this is the documented peer-compatibility exception for
+  `eslint-config-next` 16.4.6.
+- `npm audit --omit=dev --audit-level=high`: zero vulnerabilities.
+- `npm audit --audit-level=high`: exited successfully with seven moderate,
+  development-only findings in
+  `eslint-config-next → typescript-eslint → minimatch`. The current
+  `typescript-eslint` 8.72.2 still requires minimatch 10.x, and a dry-run audit
+  fix leaves the same findings. These packages are build/lint tooling and are
+  absent from the standalone runtime image. Dependabot will track the upstream
+  fix; no incompatible override or framework downgrade was applied.
+- Lint completed with zero warnings; route type generation and TypeScript
+  checking passed; the Webpack standalone production build passed.
+- The complete Redis-enabled suite passed: 18 files and 295 tests, including
+  concurrency, TTL, rate-limit, session, and stop/restart recovery coverage.
+  The clean builder initially lacked the Docker CLI required by the recovery
+  test; rerunning with only the host Docker CLI/socket mounted allowed that
+  test's disposable Redis stop/restart cycle and all 295 tests passed.
+- The rebuilt production Compose stack passed its two-client HTTP gameplay
+  smoke after an app restart, retained Redis-backed sessions/state, ran as
+  UID/GID 1001, exposed only loopback port 3000, and left Redis unpublished.
+  Stopping Redis produced the generic health 503 in 1.398 seconds; restarting
+  it restored 200.
+- Headless Chromium verified the English home page, rules dialog, invitation
+  clipboard URL, isolated host/guest sessions, host-only start control,
+  visible/hidden card rendering, local bot game start, and all retained demo
+  routes. The runtime exception monitor recorded zero hydration errors.
+  Screenshot: `/tmp/opencode/nana-browser-smoke.png`.
+- Unicode Han scanning found no matches in maintained source, specifications,
+  docs, README, or CI configuration. Removed locale/runtime identifiers had no
+  source, package, or CI references; the verification history intentionally
+  mentions their removal. A filename/content scan of 184 tracked files found
+  no runtime `.env`, private-key block, GitHub token, or AWS access-key pattern.
+- `git diff --check` passed. No live deployment or remote GitHub Actions run is
+  claimed.
+
+Known operational limitations are the seven moderate development-tool
+advisories above, the temporary ESLint 9 peer-compatible pin, and the required
+Webpack build workaround for Chakra UI's documented Next.js Turbopack Emotion
+hydration defect. The upstream artwork attribution and non-commercial caveat
+remain in the README and deployment guide.
