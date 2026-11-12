@@ -82,7 +82,7 @@ Commits `bc06195`, `dcf7531`, and `1552892` added the server-authoritative game 
 
 Verification at that checkpoint: lint (zero warnings), typecheck, 186 of 186 tests, and production build all pass. Spec-compliance and code-quality reviews passed; the review's findings (tautological immutability assertions, legacy card-identifier validation, viewer-invisible own hand, imprecise `min`/`max` typing, clone ordering, and two missing edge tests) were fixed in `dcf7531`, and the settlement stage guard is now pinned by a test in `1552892`.
 
-Stage 6 (atomic Redis persistence, expiry, and throttling) and stage 7 (route and client integration) remain; the API routes still serve the legacy protocol until stage 7 replaces them.
+Stage 7 (route and client integration) remains; the API routes still serve the legacy protocol until stage 7 replaces them.
 
 ### Atomic Redis persistence (stage 6, part A)
 
@@ -94,10 +94,22 @@ Commit `21f0c4b` replaced `src/lib/redis.ts` and added the atomic game store:
 - Chat is trimmed to the newest 100 messages on every persist.
 - Integration tests run against a disposable Redis instance keyed by a per-run prefix: concurrent joins lose no player, racing reveals and polls collect exactly once and advance the turn exactly once, room creation never overwrites, the expiry stays positive and is preserved across mutations, polling does not extend it, and chat is capped. Without `TEST_REDIS_URL` the suite is skipped with an explicit message; with it, 201 tests pass. A separate leak probe over 50 transactions showed the connected-client count rising only from one shared client to two including the administrative client.
 
+### Redis limits, sessions, and final hardening (stage 6, part B)
+
+Commits `2e1da0c`, `d49b05e`, `7a4e20c`, `e13bd54`, `9438ac0`, and `754c2a4` completed and hardened the Redis layer:
+
+- Fixed-window rate limits use an atomic Lua counter with script caching and a tested `NOSCRIPT` recovery path. Budgets are 120 polls/minute, 120 actions/minute, 20 joins/minute, 10 hosts/hour, and a separate global unauthenticated creation cap of 60/minute. Keys are bounded, validated, and identity-hashed; forwarded client IPs are ignored unless an explicit trusted-proxy hop count is configured. Results expose the remaining budget and retry delay for stage 7 to emit 429 plus `Retry-After`.
+- `RedisSessionStore` persists only SHA-256 token digests, enforces bounded logical and Redis TTLs, rejects and deletes stale or malformed records, checks player identifiers and timestamp chronology, and refreshes a valid session only through the explicit reuse/write path. Parity tests compare it with the in-memory session store.
+- Atomic updates now allow one initial attempt plus five conflict retries, await synchronous or asynchronous transitions, and reject malformed transition results before writing. Persisted and returned states pass a closed runtime schema: room identity, stages, timestamps, players, cards, messages, allowed keys, and JSON-safe acyclic data are validated. Empty card identifiers are accepted only as concealed stable slots in `publicCards`, never in hands, collections, or the deck.
+- Reads validate syntactically valid stored JSON through the same schema and map corrupt room documents to the generic storage failure. Repository prefixes, TTLs, and retry counts are bounded and validated.
+- The shared Redis connection can recover after terminal reconnect exhaustion. Isolated WATCH connections have independent finite reconnect state so they cannot mark a healthy shared client terminal. Tests stop/restart a disposable Redis, kill one exact client connection, and verify recovery without leaking sockets.
+- TTL tests use bounded condition polling rather than fixed sleeps; no-op updates and reads are proven not to refresh expiry.
+
+Final stage-6 verification: lint with zero warnings, typecheck, production build, 233 unit/non-Redis tests passing with 46 integration tests explicitly skipped when `TEST_REDIS_URL` is absent, and 276 of 276 tests passing against disposable Redis 8.10.3. Spec and code-quality reviews passed with no remaining findings. No API or client route was changed in this stage.
+
 #### Stage 7 wiring constraints identified during review
 
 - A retried transition re-runs against the fresh state. For a player reveal that resolves to the player's minimum or maximum card, a retry can therefore reveal the next card instead of failing. The approved specification requires only `roomId`, `targetPlayerId`, and the min/max choice in the payload, so no concrete card identifier is mandated; the precondition must nevertheless be enforced in the engine, which is the only layer that observes the state committed inside the transaction, so the route layer cannot evaluate it atomically.
-- The transaction callback result is not awaited defensively. A transition returning a promise would serialize as an empty document and overwrite the room, so stage 7 must await the result and validate its shape.
 - The new repository and the legacy writer use the same `game:<roomId>` key space. The legacy writer drops the expiry and is not atomic, so stage 7 must retire the legacy routes in the same change that switches clients over.
 - Room identifiers are now minted by the server. The client must navigate with the identifier returned by the host response instead of the client-generated one.
 - Redis configuration and unavailability errors are not API errors and map to the generic 503 through the central error mapper without exposing the connection string.
