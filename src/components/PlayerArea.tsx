@@ -11,17 +11,19 @@ import {
 import PlayerInfo from "@/components/PlayerInfo";
 import HandArea from "@/components/HandArea";
 import CollectionArea from "@/components/CollectionArea";
-import { ActionPrefix, Player } from "@/types";
+import { MultiplayerAction, PublicPlayer } from "@/types";
 import { useGameSound } from "@/lib/use-game-sound";
 
 const PlayerArea = ({
   isMe = false,
   player,
   act,
+  disabled = false,
 }: {
   isMe?: boolean;
-  player: Player | undefined;
-  act: (action: ActionPrefix, data?: unknown) => void;
+  player: PublicPlayer | undefined;
+  act: (action: MultiplayerAction, data?: unknown) => void;
+  disabled?: boolean;
 }) => {
   const { playWoosh, playSuccess } = useGameSound();
   const revealedCount = player?.hand.filter((card) => card.isRevealed).length;
@@ -88,11 +90,12 @@ const PlayerArea = ({
             height="90px"
             writingMode="vertical-rl"
             onClick={() =>
-              act("action:reveal-player-card", {
+              act("reveal-player", {
                 targetPlayerId: player?.id,
                 minMax: "min",
               })
             }
+            disabled={disabled}
           >
             Lowest
           </Button>
@@ -105,11 +108,12 @@ const PlayerArea = ({
             height="90px"
             writingMode="vertical-rl"
             onClick={() =>
-              act("action:reveal-player-card", {
+              act("reveal-player", {
                 targetPlayerId: player?.id,
                 minMax: "max",
               })
             }
+            disabled={disabled}
           >
             Highest
           </Button>

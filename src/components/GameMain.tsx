@@ -10,9 +10,8 @@ import {
   Text,
   VStack,
 } from "@chakra-ui/react";
-import { ActionPrefix, ServerState } from "@/types";
+import { MultiplayerAction, PublicGameState } from "@/types";
 import PlayerArea from "@/components/PlayerArea";
-import CardDeck from "@/components/CardDeck";
 import PublicArea from "@/components/PublicArea";
 import { calculateDisplayPlayerIndices } from "@/lib/game-helper";
 import { useGameToast } from "@/lib/use-game-toast";
@@ -21,17 +20,18 @@ import { useWindowSize } from "@/lib/use-window-size";
 import ChatArea from "@/components/ChatArea";
 import BigToast from "@/components/BigToast";
 import { useGameSound } from "@/lib/use-game-sound";
-import { useGameSettingsStore } from "@/store/setting-store";
 
 export default function GameMain({
   serverState,
   act,
+  actionPending,
 }: {
-  serverState: ServerState;
-  act: (action: ActionPrefix, data?: unknown) => void;
+  serverState: PublicGameState;
+  act: (action: MultiplayerAction, data?: unknown) => void;
+  actionPending: boolean;
 }) {
   // hooks
-  const { playerId } = useGameSettingsStore();
+  const playerId = serverState.viewerId;
   const { width, height } = useWindowSize();
 
   const { toastInfo } = useGameToast();
@@ -103,22 +103,26 @@ export default function GameMain({
             <Tag.Label>{serverState.gameId}</Tag.Label>
           </Tag.Root>
         </HStack>
-        <Button
+        {serverState.gameStage === "stage:lobby" &&
+          serverState.players.find((player) => player.id === playerId)?.isHost && <Button
           colorPalette="blue"
-          onClick={() => act("action:start-game")}
+          onClick={() => act("start")}
+          disabled={actionPending}
         >
           Start game
-        </Button>
+        </Button>}
       </VStack>
 
       <VStack h="100vh" flex={3} gap="16px" justifyContent="center">
         <PlayerArea
           player={serverState.players[displayPlayerIndices[2]]}
           act={act}
+          disabled={actionPending}
         ></PlayerArea>
         <PlayerArea
           player={serverState.players[displayPlayerIndices[1]]}
           act={act}
+          disabled={actionPending}
         ></PlayerArea>
       </VStack>
 
@@ -126,6 +130,7 @@ export default function GameMain({
         <PlayerArea
           player={serverState.players[displayPlayerIndices[3]]}
           act={act}
+          disabled={actionPending}
         ></PlayerArea>
 
         <VStack
@@ -138,12 +143,6 @@ export default function GameMain({
           justifyContent="center"
         >
           <Text color="white">Public area</Text>
-          {serverState?.cardDeck && serverState.cardDeck.length > 0 && (
-            <VStack>
-              <CardDeck cards={serverState.cardDeck}></CardDeck>
-            </VStack>
-          )}
-
           {serverState?.publicCards && (
             <PublicArea cards={serverState?.publicCards} act={act}></PublicArea>
           )}
@@ -153,6 +152,7 @@ export default function GameMain({
           isMe={true}
           player={serverState.players[displayPlayerIndices[0]]}
           act={act}
+          disabled={actionPending}
         ></PlayerArea>
       </VStack>
 
@@ -160,10 +160,12 @@ export default function GameMain({
         <PlayerArea
           player={serverState.players[displayPlayerIndices[4]]}
           act={act}
+          disabled={actionPending}
         ></PlayerArea>
         <PlayerArea
           player={serverState.players[displayPlayerIndices[5]]}
           act={act}
+          disabled={actionPending}
         ></PlayerArea>
       </VStack>
 
@@ -172,7 +174,7 @@ export default function GameMain({
         {/*  Server state: {serverState.gameStage} - {serverState.gameSubStage} -{" "}*/}
         {/*  {serverState.timestamp}*/}
         {/*</Text>*/}
-        <ChatArea messages={serverState.messages} act={act}></ChatArea>
+        <ChatArea messages={serverState.messages} act={act} disabled={actionPending}></ChatArea>
       </Box>
 
       <Confetti

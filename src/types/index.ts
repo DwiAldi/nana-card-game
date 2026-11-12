@@ -1,6 +1,5 @@
 export type GameStagePrefix = `stage:${string}`;
 export type SubStagePrefix = `sub:${string}`;
-export type ActionPrefix = `action:${string}`;
 
 export interface ServerState {
   gameId: string;
@@ -30,20 +29,6 @@ export interface Card {
   isRevealed: boolean;
 }
 
-export interface Action {
-  gameId: string;
-  playerId: string;
-  action: ActionPrefix;
-  data: {
-    playerId: string;
-    playerName: string;
-    cardId: string;
-    targetPlayerId: string;
-    minMax: "min" | "max";
-    message: string;
-  };
-}
-
 /**
  * Public card projection for networked play.
  *
@@ -55,9 +40,13 @@ export interface Action {
  * cards carry their number (the owner may always see their own cards),
  * while every other player's hidden cards stay numberless.
  */
-export type PublicCard =
-  | { id: string; isRevealed: false }
-  | { id: string; isRevealed: true; number: number };
+export interface PublicCard {
+  id: string;
+  /** Whether opponents/table viewers can see this card. */
+  isRevealed: boolean;
+  /** Present for publicly revealed cards and for the viewer's own hand only. */
+  number?: number;
+}
 
 export interface PublicPlayer {
   id: string;
@@ -86,6 +75,12 @@ export interface PublicGameState {
   publicCards: PublicCard[];
   messages: Message[];
 }
+
+export type MultiplayerAction =
+  | "start"
+  | "reveal-public"
+  | "reveal-player"
+  | "chat";
 
 export interface LocalPlayerInfo {
   id: string;

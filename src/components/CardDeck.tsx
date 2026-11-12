@@ -4,9 +4,9 @@ import React from "react";
 import { motion } from "framer-motion";
 import NanaCard from "@/components/NanaCard";
 import { Center } from "@chakra-ui/react";
-import { Card } from "@/types";
+import { PublicCard } from "@/types";
 
-const CardDeck = ({ cards }: { cards: Card[] }) => {
+const CardDeck = ({ cards }: { cards: PublicCard[] }) => {
   return (
     <Center
       w="140px"
@@ -28,6 +28,7 @@ const CardDeck = ({ cards }: { cards: Card[] }) => {
               onClick={() => {}}
               key={card.id}
               cardId={card.id}
+              number={card.number}
               isRevealed={card.isRevealed}
               w="90px"
               h="120px"

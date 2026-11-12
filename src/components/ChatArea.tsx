@@ -8,7 +8,7 @@ import {
   Text,
   Icon,
 } from "@chakra-ui/react";
-import { ActionPrefix, Message } from "@/types";
+import { MultiplayerAction, Message } from "@/types";
 import { motion, useAnimate } from "framer-motion";
 import {
   RiSendPlaneFill,
@@ -27,9 +27,11 @@ const toHHSS = (timestamp: number) => {
 const ChatArea = ({
   messages,
   act,
+  disabled = false,
 }: {
   messages: Message[];
-  act: (action: ActionPrefix, data?: unknown) => void;
+  act: (action: MultiplayerAction, data?: unknown) => void;
+  disabled?: boolean;
 }) => {
   const [message, setMessage] = useState<string>("");
   const [isCollapsed, setIsCollapsed] = useState<boolean>(true);
@@ -42,7 +44,7 @@ const ChatArea = ({
 
   const sendMessage = () => {
     if (message && message !== "") {
-      act("action:chat", { message: message });
+      act("chat", { message: message });
       setMessage("");
     }
   };
@@ -86,7 +88,7 @@ const ChatArea = ({
         </Box>
         <InputGroup
           endElement={
-            <button onClick={sendMessage} aria-label="Send message">
+            <button onClick={sendMessage} aria-label="Send message" disabled={disabled}>
               <Icon w="16px" h="16px" color="white" as={RiSendPlaneFill} />
             </button>
           }
@@ -103,6 +105,7 @@ const ChatArea = ({
               }
             }}
             enterKeyHint="send"
+            disabled={disabled}
           />
         </InputGroup>
       </Box>

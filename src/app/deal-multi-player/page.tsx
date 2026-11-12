@@ -104,6 +104,7 @@ export default function App() {
               onClick={onFlipToFront}
               key={cardId}
               cardId={cardId}
+              number={Number(cardId.split("-")[0])}
               isRevealed={revealedCardNumbers.includes(cardId.split("-")[0])}
               w="90px"
               h="120px"
@@ -136,6 +137,7 @@ export default function App() {
                   onClick={onFlipToFront}
                   key={cardId}
                   cardId={cardId}
+                  number={Number(cardId.split("-")[0])}
                   isRevealed={revealedCardNumbers.includes(cardId.split("-")[0])}
                   w="90px"
                   h="120px"
@@ -152,6 +154,7 @@ export default function App() {
                 onClick={onFlipToFront}
                 key={cardId}
                 cardId={cardId}
+                number={Number(cardId.split("-")[0])}
                 isRevealed={revealedCardNumbers.includes(cardId.split("-")[0])}
                 w="90px"
                 h="120px"
@@ -190,6 +193,7 @@ export default function App() {
                 onClick={onFlipToFront}
                 key={cardId}
                 cardId={cardId}
+                number={Number(cardId.split("-")[0])}
                 isRevealed={revealedCardNumbers.includes(cardId.split("-")[0])}
                 w="90px"
                 h="120px"

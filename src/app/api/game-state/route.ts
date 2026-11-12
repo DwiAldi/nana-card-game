@@ -1,53 +1,16 @@
-import { getRedis } from "@/lib/redis";
-import { NextRequest } from "next/server";
-import { ServerState } from "@/types";
-import { getCurrentAndNextPlayer, findWinner } from "@/lib/game-helper";
-import { setGameOver, settleAndNextRound } from "@/lib/server-game-state";
+import { createGameApi } from "@/lib/server/game-api";
+import { RedisGameRepository } from "@/lib/server/game-repository";
+import { createRateLimiter } from "@/lib/server/rate-limit";
+import { loadServerConfig } from "@/lib/server/session";
+import { RedisSessionStore } from "@/lib/server/session-redis";
 
-export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const gameId = searchParams.get("id");
-  const playerId = searchParams.get("playerId");
+const api = createGameApi({
+  config: loadServerConfig(process.env),
+  repository: new RedisGameRepository(),
+  sessions: new RedisSessionStore(),
+  limiter: createRateLimiter(),
+});
 
-  if (gameId == null || playerId == null) {
-    return Response.json(
-      { error: "you are not in this game, please join from the home page" },
-      { status: 400 },
-    );
-  }
-
-  const redis = await getRedis();
-  const data = await redis.get(`game:${gameId}`);
-  const serverState = data ? (JSON.parse(data) as ServerState) : null;
-
-  if (!serverState?.players.some((p) => p.id === playerId)) {
-    return Response.json(
-      { error: "you are not in this game, please join from the home page" },
-      { status: 400 },
-    );
-  }
-
-  if (serverState?.gameSubStage === "sub:settling") {
-    if (Date.now() - serverState.timestamp > 2000) {
-      // start to settle
-      const [currentPlayer] = getCurrentAndNextPlayer(serverState.players);
-      if (currentPlayer.id === playerId) {
-        await settleAndNextRound(gameId, serverState);
-
-        const winner = findWinner(serverState);
-        if (winner) {
-          await setGameOver(gameId, serverState, winner.id);
-        }
-      }
-    }
-  }
-
-  // TODO add error case
-  // error: game not found
-  // error: you are not in this game
-
-  return Response.json(serverState);
-}
-
+export const GET = api.gameState;
 export const runtime = "nodejs";
 export const fetchCache = "force-no-store";

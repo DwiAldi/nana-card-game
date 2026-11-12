@@ -22,7 +22,7 @@ const card = (id: string, number: number, isRevealed = false): Card => ({
 });
 
 /** Collection cards always serialize as visible; unwraps the union safely. */
-const cardNumber = (c: PublicCard): number => (c.isRevealed ? c.number : Number.NaN);
+const cardNumber = (c: PublicCard): number => c.number ?? Number.NaN;
 
 /**
  * A mid-game fixture with known hidden values. The hidden numbers 2, 5, 7,
@@ -135,8 +135,8 @@ describe("toPublicState", () => {
     const publicState = toPublicState(fixtureState(), P1);
     const me = publicState.players.find((p) => p.id === P1)!;
     expect(me.hand).toEqual([
-      { id: "opaque-h1", isRevealed: true, number: 5 },
-      { id: "7-a", isRevealed: true, number: 7 },
+      { id: "opaque-h1", isRevealed: false, number: 5 },
+      { id: "7-a", isRevealed: false, number: 7 },
       { id: "opaque-r1", isRevealed: true, number: 9 },
     ]);
   });
@@ -221,7 +221,8 @@ describe("toPublicState", () => {
     for (const player of publicState.players) {
       for (const handCard of player.hand) {
         expect(handCard.isRevealed).toBe(false);
-        expect(handCard).not.toHaveProperty("number");
+        if (player.id === P3) expect(typeof handCard.number).toBe("number");
+        else expect(handCard).not.toHaveProperty("number");
       }
     }
     expectNoHiddenValueLeak(publicState, [...HIDDEN_VALUES, 9, 8]);
@@ -318,7 +319,8 @@ describe("toPublicState", () => {
       for (const handCard of player.hand) {
         if (!handCard.isRevealed) {
           expect(handCard.id).not.toMatch(/^\d+-[abc]$/);
-          expect(handCard).not.toHaveProperty("number");
+          if (player.id === P2) expect(typeof handCard.number).toBe("number");
+          else expect(handCard).not.toHaveProperty("number");
         } else {
           expect(typeof handCard.number).toBe("number");
         }
@@ -343,7 +345,7 @@ describe("toPublicState", () => {
     const owner = asOwner.players.find((p) => p.id === P2)!;
     expect(owner.hand).toHaveLength(8);
     for (const handCard of owner.hand) {
-      expect(handCard.isRevealed).toBe(true);
+      expect(handCard.isRevealed).toBe(false);
       expect(Number.isFinite(cardNumber(handCard))).toBe(true);
     }
 

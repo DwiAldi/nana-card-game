@@ -30,10 +30,10 @@ const NanaCardBody = ({
   number,
   variant,
 }: {
-  number: string;
+  number?: number;
   variant: "front" | "back";
 }) => {
-  const imgFileName = cardAssetMap.get(number);
+  const imgFileName = number === undefined ? undefined : cardAssetMap.get(String(number));
   return (
     <Box
       w="100%"
@@ -44,7 +44,7 @@ const NanaCardBody = ({
       overflow="hidden"
       position="relative"
     >
-      {variant === "front" ? (
+      {variant === "front" && imgFileName ? (
         <Image
           fill
           sizes="90px"
@@ -67,6 +67,7 @@ const NanaCardBody = ({
 
 const NanaCard = ({
   cardId,
+  number,
   w,
   h,
   onClick,
@@ -76,6 +77,7 @@ const NanaCard = ({
   style,
 }: {
   cardId: string;
+  number?: number;
   w: string;
   h: string;
   style?: React.CSSProperties;
@@ -87,6 +89,7 @@ const NanaCard = ({
   const [rotateXaxis, setRotateXaxis] = useState(0);
   const [rotateYaxis, setRotateYaxis] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+  const showFace = isRevealed && number !== undefined;
 
   const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
     const element = ref.current;
@@ -153,32 +156,33 @@ const NanaCard = ({
           }}
         >
           <motion.div
-            animate={{ rotateY: isRevealed ? -180 : 0 }}
+            animate={{ rotateY: showFace ? -180 : 0 }}
             transition={spring}
             style={{
               width: "100%",
               height: "100%",
-              zIndex: isRevealed ? 0 : 1,
+              zIndex: showFace ? 0 : 1,
               backfaceVisibility: "hidden",
               position: "absolute",
             }}
           >
-            <NanaCardBody number={cardId.split("-")[0]} variant="back" />
+            <NanaCardBody variant="back" />
           </motion.div>
-          <motion.div
+          {showFace && <motion.div
             initial={{ rotateY: 180 }}
-            animate={{ rotateY: isRevealed ? 0 : 180 }}
+            animate={{ rotateY: showFace ? 0 : 180 }}
             transition={spring}
             style={{
               width: "100%",
               height: "100%",
-              zIndex: isRevealed ? 1 : 0,
+              zIndex: showFace ? 1 : 0,
               backfaceVisibility: "hidden",
               position: "absolute",
             }}
           >
-            <NanaCardBody number={cardId.split("-")[0]} variant="front" />
+            <NanaCardBody number={number} variant="front" />
           </motion.div>
+          }
         </div>
       </motion.div>
       {/*<span style={{ position: "absolute", bottom: 0 }}>{cardId}</span>*/}

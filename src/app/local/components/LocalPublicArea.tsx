@@ -39,6 +39,7 @@ const LocalPublicArea = ({
             }}
             key={card.id}
             cardId={card.id}
+            number={card.number}
             isRevealed={card.isRevealed}
             w="90px"
             h="120px"

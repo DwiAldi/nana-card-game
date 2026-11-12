@@ -144,7 +144,7 @@ export const removeTargetCards = (
 
 export const calculateDisplayPlayerIndices = (
   myPlayerId: string | undefined,
-  players: Player[],
+  players: Array<{ id: string }>,
 ) => {
   const myIndex = players?.findIndex((p) => p.id === myPlayerId);
   if (myIndex < 0) {

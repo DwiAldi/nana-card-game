@@ -420,6 +420,29 @@ describe("reveal-public", () => {
     expect(revealed[0].number).toBe(2);
   });
 
+  it("rejects a retried min/max reveal when the originally selected card is no longer legal", () => {
+    const state = inGameState({
+      hands: { [P2]: [card("first-min", 2), card("second-min", 4)] },
+    });
+    const afterConcurrentReveal = structuredClone(state);
+    afterConcurrentReveal.players[1].hand[0].isRevealed = true;
+
+    expect(() =>
+      applyGameAction(
+        afterConcurrentReveal,
+        {
+          type: "reveal-player",
+          targetPlayerId: P2,
+          minMax: "min",
+          selectedCardId: "first-min",
+        },
+        P1,
+        NOW,
+      ),
+    ).toThrow(ConflictError);
+    expect(afterConcurrentReveal.players[1].hand[1].isRevealed).toBe(false);
+  });
+
   it("enters settling on a mismatched second reveal", () => {
     const state = inGameState({
       hands: { [P1]: [card("h1", 5, true)] },

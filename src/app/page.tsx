@@ -21,6 +21,7 @@ import { useGameSettingsStore } from "@/store/setting-store";
 import { BsRobot } from "react-icons/bs";
 import { toaster } from "@/components/ui/toaster";
 import { useJoinRoomId } from "@/lib/use-join-room-id";
+import { gameApi, GameApiError } from "@/lib/client-api";
 
 const GamePage = () => {
   const router = useRouter();
@@ -29,8 +30,8 @@ const GamePage = () => {
 
   const { t } = useTranslation();
 
-  const { playerId, playerName, setPlayerName } =
-    useGameSettingsStore();
+  const { playerName, setPlayerName } = useGameSettingsStore();
+  const [pending, setPending] = React.useState(false);
 
   const { joinRoomId, setJoinRoomId } = useJoinRoomId(joinParam);
 
@@ -44,30 +45,21 @@ const GamePage = () => {
       });
       return;
     }
-    const newGameId = Date.now().toString(36);
-    const res = await fetch("/api/action", {
-      method: "POST",
-      body: JSON.stringify({
-        gameId: newGameId,
-        playerId: playerId,
-        action: "action:host",
-        data: {
-          playerId: playerId,
-          playerName: playerName,
-        },
-      }),
-    });
-    if (res.ok) {
-      router.push(`/${newGameId}`);
-    } else {
+    if (pending) return;
+    setPending(true);
+    try {
+      const state = await gameApi.host(playerName);
+      router.push(`/${state.gameId}`);
+    } catch (error) {
       toaster.create({
-        title: `Server error`,
-        description:
-          "Vercel KV max daily request limit exceeded. Limit: 10000, Usage: 10000.",
+        title: "Unable to create game",
+        description: error instanceof Error ? error.message : "The request failed",
         type: "error",
         duration: 2000,
         closable: true,
       });
+    } finally {
+      setPending(false);
     }
   };
 
@@ -81,29 +73,21 @@ const GamePage = () => {
       });
       return;
     }
-    const res = await fetch("/api/action", {
-      method: "POST",
-      body: JSON.stringify({
-        action: "action:join",
-        gameId: joinRoomId,
-        playerId: playerId,
-        data: {
-          playerId: playerId,
-          playerName: playerName,
-        },
-      }),
-    });
-    if (res.ok) {
-      router.push(`/${joinRoomId}`);
-    } else {
+    if (pending) return;
+    setPending(true);
+    try {
+      const state = await gameApi.join(joinRoomId, playerName);
+      router.push(`/${state.gameId}`);
+    } catch (error) {
       toaster.create({
-        title: `Server error`,
-        description:
-          "Vercel KV max daily request limit exceeded. Limit: 10000, Usage: 10000.",
+        title: "Unable to join game",
+        description: error instanceof GameApiError ? error.message : "The request failed",
         type: "error",
         duration: 2000,
         closable: true,
       });
+    } finally {
+      setPending(false);
     }
   };
 
@@ -203,6 +187,7 @@ const GamePage = () => {
                   variant="solid"
                   colorPalette="blue"
                   onClick={() => hostRoom()}
+                  disabled={pending}
                 >
                   {t("CREATE_GAME")}
                 </Button>
@@ -237,6 +222,7 @@ const GamePage = () => {
               variant="solid"
               colorPalette="blue"
               onClick={() => joinRoom()}
+              disabled={pending}
             >
               {t("JOIN_GAME")}
             </Button>

@@ -2,14 +2,14 @@
 
 import React from "react";
 import { Avatar, Box, Heading, HStack, Text } from "@chakra-ui/react";
-import { Player } from "@/types";
+import { Player, PublicPlayer } from "@/types";
 
 const PlayerInfo = ({
   seatNumber,
   player,
 }: {
   seatNumber: number;
-  player: Player | undefined;
+  player: Player | PublicPlayer | undefined;
 }) => {
   return (
     <HStack width="200px" gap="4">

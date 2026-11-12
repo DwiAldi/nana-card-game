@@ -1,20 +1,21 @@
 "use client";
 
-import { Card } from "@/types";
+import { PublicCard } from "@/types";
 import { Box, HStack, Text } from "@chakra-ui/react";
 import { motion } from "framer-motion";
 import NanaCard from "@/components/NanaCard";
 
-const CollectionArea = ({ cards }: { cards: Card[] }) => {
+const CollectionArea = ({ cards }: { cards: PublicCard[] }) => {
   const groupedCards = cards.reduce(
     (acc, card) => {
+      if (card.number === undefined) return acc;
       if (!acc[card.number]) {
         acc[card.number] = [];
       }
       acc[card.number].push(card);
       return acc;
     },
-    {} as { [key: string]: Card[] },
+    {} as { [key: string]: PublicCard[] },
   );
 
   return (
@@ -32,6 +33,7 @@ const CollectionArea = ({ cards }: { cards: Card[] }) => {
               <NanaCard
                 onClick={() => {}}
                 cardId={c.id}
+                number={c.number}
                 isRevealed={true}
                 w="45px"
                 h="60px"

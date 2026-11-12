@@ -108,6 +108,7 @@ const LocalPlayerArea = ({
                   }}
                   onClick={() => {}}
                   cardId={card.id}
+                  number={card.number}
                   isRevealed={isMe ? true : card.isRevealed}
                   w={cardWidth}
                   h={cardHeight}

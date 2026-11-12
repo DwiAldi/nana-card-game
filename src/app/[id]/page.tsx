@@ -1,105 +1,88 @@
 "use client";
+
 import { Box } from "@chakra-ui/react";
-import React from "react";
-import { useRequest } from "ahooks";
-import GameMain from "@/components/GameMain";
-import { ActionPrefix, ServerState } from "@/types";
+import React, { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import GameMain from "@/components/GameMain";
 import GameRuleButton from "@/components/GameRuleButton";
 import FullScreenButton from "@/components/FullScreenButton";
 import VolumeButton from "@/components/VolumeButton";
-import { useGameSettingsStore } from "@/store/setting-store";
 import { toaster } from "@/components/ui/toaster";
+import { gameApi, GameApiError } from "@/lib/client-api";
+import type { MinMax } from "@/lib/game-helper";
+import type { MultiplayerAction, PublicGameState } from "@/types";
 
 const GameRoomPage = () => {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
+  const [serverState, setServerState] = useState<PublicGameState>();
+  const [actionPending, setActionPending] = useState(false);
 
-  const { playerId } = useGameSettingsStore();
+  useEffect(() => {
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
-  const gameStateFetcher = async (): Promise<ServerState> => {
-    const res = await fetch(
-      `/api/game-state?id=${id}&playerId=${playerId}`,
-      {
-        cache: "no-cache",
-      },
-    );
-    if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.error);
-    }
-    return res.json();
-  };
+    const poll = async () => {
+      try {
+        const state = await gameApi.poll(id);
+        if (!active) return;
+        setServerState(state);
+        timer = setTimeout(poll, 1000);
+      } catch (error) {
+        if (!active) return;
+        if (error instanceof GameApiError && error.status === 429) {
+          timer = setTimeout(poll, Math.max(1, error.retryAfterSeconds ?? 1) * 1000);
+          return;
+        }
+        toaster.create({
+          title: "Unable to load the room",
+          description: error instanceof Error ? error.message : "The request failed",
+          type: "error",
+          duration: 6000,
+          closable: true,
+        });
+        router.push("/");
+      }
+    };
 
-  const {
-    data: serverState,
-    // refresh: refreshServerState,
-    mutate: mutateServerState,
-  } = useRequest(gameStateFetcher, {
-    pollingInterval: 1000,
-    onError: (error) => {
+    void poll();
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [id, router]);
+
+  const act = useCallback(async (action: MultiplayerAction, data?: unknown) => {
+    if (actionPending) return;
+    setActionPending(true);
+    try {
+      const payload = (data ?? {}) as Record<string, string>;
+      const next = action === "start"
+        ? await gameApi.start(id)
+        : action === "reveal-public"
+          ? await gameApi.revealPublic(id, payload.cardId)
+          : action === "reveal-player"
+            ? await gameApi.revealPlayer(id, payload.targetPlayerId, payload.minMax as MinMax)
+            : await gameApi.chat(id, payload.message);
+      setServerState(next);
+    } catch (error) {
       toaster.create({
-        title: "Unable to load the room",
-        description: error.message,
+        title: "Action failed",
+        description: error instanceof Error ? error.message : "The request failed",
         type: "error",
-        duration: 6000,
+        duration: 3000,
         closable: true,
       });
-      router.push("/");
-    },
-  });
-
-  const actionExecutor = async (
-    actionType: ActionPrefix,
-    data?: unknown,
-  ): Promise<ServerState> => {
-    if (actLoading) {
-      console.log("Action is currently loading, skipping fetch.");
-      return Promise.reject("Action is currently loading.");
+    } finally {
+      setActionPending(false);
     }
-    const res = await fetch("/api/action", {
-      method: "POST",
-      body: JSON.stringify({
-        gameId: id,
-        playerId: playerId,
-        action: actionType,
-        data: data,
-      }),
-    });
-    if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.error);
-    }
-    return res.json();
-  };
-
-  const { run: act, loading: actLoading } = useRequest(actionExecutor, {
-    manual: true,
-    onSuccess: (result) => {
-      mutateServerState(result);
-      toaster.create({
-        title: `Action completed`,
-        // description: `${JSON.stringify(params)}`,
-        type: "success",
-        duration: 2000,
-        closable: true,
-      });
-    },
-    onError: (error) => {
-      toaster.create({
-        title: `Action failed`,
-        description: error.message,
-        type: "error",
-        duration: 2000,
-        closable: true,
-      });
-    },
-  });
+  }, [actionPending, id]);
 
   return (
     <>
-      {serverState && <GameMain serverState={serverState} act={act} />}
-
+      {serverState && (
+        <GameMain serverState={serverState} act={act} actionPending={actionPending} />
+      )}
       <Box
         position="fixed"
         top="16px"

@@ -46,7 +46,13 @@ export type GameAction =
   | { type: "join"; name: string }
   | { type: "start" }
   | { type: "reveal-public"; cardId: string }
-  | { type: "reveal-player"; targetPlayerId: string; minMax: MinMax }
+  | {
+      type: "reveal-player";
+      targetPlayerId: string;
+      minMax: MinMax;
+      /** Internal retry precondition; never accepted from public input. */
+      selectedCardId?: string;
+    }
   | { type: "chat"; message: string };
 
 /**
@@ -255,6 +261,12 @@ export function applyGameAction(
         throw new BadRequestError("Unknown target player");
       }
       const cardId = findUnrevealedCardId(target.hand, action.minMax);
+      if (action.selectedCardId !== undefined && cardId !== action.selectedCardId) {
+        throw new ConflictError("The selected card changed, please try again");
+      }
+      if (action.selectedCardId === undefined && cardId !== undefined) {
+        action.selectedCardId = cardId;
+      }
       const targetCard = cardId
         ? target.hand.find((c) => c.id === cardId)
         : undefined;

@@ -42,7 +42,7 @@ function toPublicCard(card: Card, revealNumber = false): PublicCard {
     return { id: "", isRevealed: false };
   }
   if (card.isRevealed || revealNumber) {
-    return { id: card.id, isRevealed: true, number: card.number };
+    return { id: card.id, isRevealed: card.isRevealed, number: card.number };
   }
   return { id: card.id, isRevealed: false };
 }
