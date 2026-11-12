@@ -166,3 +166,14 @@ Fresh stage-8 verification:
 - Fresh repository checks passed: lint and typecheck; 252 unit/non-Redis tests with 46 explicit integration skips; 295 of 295 tests against disposable Redis 8.10.3; and the Webpack standalone production build. The known high transitive audit finding remains a release blocker for stage 10.
 
 No public deployment was performed.
+
+### CI and dependency maintenance (stage 9)
+
+Commit `ccfad7b` added GitHub Actions CI and weekly Dependabot maintenance:
+
+- CI grants only `contents: read`, cancels superseded runs, installs through `npm ci` on Node 26.13.1, starts an authenticated disposable Redis 8.10.3 container, and runs lint, typecheck, all Redis-backed tests, the standalone production build, and a production-container build.
+- Production and full-tree audits both use `--audit-level=high` and are not marked optional. The full-tree audit uses `always()` only so its report is still produced when the production audit fails; either high finding still fails the job.
+- `actions/checkout` 7.0.1 and `actions/setup-node` 7.1.0 are pinned to immutable 40-character commit SHAs with version comments. The workflow contains no deployment credentials; its Redis password is an explicit disposable test-only value.
+- Dependabot checks npm, GitHub Actions, and Docker weekly. Compatible minor/patch updates are grouped, while major upgrades remain separately visible.
+
+Pre-commit validation: both files passed Prettier parsing and PyYAML loading; a script confirmed every `uses:` reference is a 40-character SHA and the least-privilege permission is present. The underlying lint, typecheck, tests, application build, and container build passed locally. Both audit commands were run and failed as intended on the unresolved lodash high advisory; production reported one high and one moderate, while the full tree reported one high and nine moderate. Resolving that blocker belongs to stage 10. No remote workflow run is claimed.
