@@ -32,11 +32,14 @@ export default function App() {
   const [botCards, setBotCards] = useState<string[]>([]);
   const [publicCards, setPublicCards] = useState<string[]>([]);
   const [revealedCardNumbers, setRevealedCardNumbers] = useState<string[]>([]);
-  const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
     () => () => {
-      if (resetTimer.current) clearTimeout(resetTimer.current);
+      if (resetTimer.current !== null) {
+        clearTimeout(resetTimer.current);
+        resetTimer.current = null;
+      }
     },
     [],
   );
@@ -76,7 +79,9 @@ export default function App() {
     } else if (revealedCardNumbers.includes(cardNumber)) {
       setRevealedCardNumbers((prev) => [...prev, cardNumber]);
     } else {
+      if (resetTimer.current !== null) clearTimeout(resetTimer.current);
       resetTimer.current = setTimeout(() => {
+        resetTimer.current = null;
         resetAll();
         toaster.create({
           title: "Challenge failed",

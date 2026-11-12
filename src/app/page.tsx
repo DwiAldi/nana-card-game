@@ -12,7 +12,7 @@ import {
   Text,
   VStack,
 } from "@chakra-ui/react";
-import React, { useState } from "react";
+import React from "react";
 import { BsGithub } from "react-icons/bs";
 import { useRouter, useSearchParams } from "next/navigation";
 import GameRuleButton from "@/components/GameRuleButton";
@@ -20,6 +20,7 @@ import { useTranslation } from "@/i18n/index";
 import { useGameSettingsStore } from "@/store/setting-store";
 import { BsRobot } from "react-icons/bs";
 import { toaster } from "@/components/ui/toaster";
+import { useJoinRoomId } from "@/lib/use-join-room-id";
 
 const GamePage = () => {
   const router = useRouter();
@@ -31,7 +32,7 @@ const GamePage = () => {
   const { playerId, playerName, setPlayerName } =
     useGameSettingsStore();
 
-  const [joinRoomId, setJoinRoomId] = useState(joinParam ?? "");
+  const { joinRoomId, setJoinRoomId } = useJoinRoomId(joinParam);
 
   const hostRoom = async () => {
     if (!playerName) {
@@ -111,7 +112,10 @@ const GamePage = () => {
       <VStack gap="12px">
         <VStack>
           <Text
-            bgGradient="linear(to-r, gray.300, yellow.400, pink.200)"
+            bgGradient="to-r"
+            gradientFrom="gray.300"
+            gradientVia="yellow.400"
+            gradientTo="pink.200"
             bgClip="text"
             fontSize="6xl"
             fontWeight="extrabold"
@@ -132,7 +136,10 @@ const GamePage = () => {
             </IconButton>
           </Text>
           <Text
-            bgGradient="linear(to-r, gray.300, yellow.400, pink.200)"
+            bgGradient="to-r"
+            gradientFrom="gray.300"
+            gradientVia="yellow.400"
+            gradientTo="pink.200"
             bgClip="text"
             fontSize="lg"
             fontWeight="extrabold"

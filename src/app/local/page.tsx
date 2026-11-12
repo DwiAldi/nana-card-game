@@ -59,7 +59,10 @@ function ConfigScreen() {
       <VStack gap="16px">
         <VStack>
           <Text
-            bgGradient="linear(to-r, gray.300, yellow.400, pink.200)"
+            bgGradient="to-r"
+            gradientFrom="gray.300"
+            gradientVia="yellow.400"
+            gradientTo="pink.200"
             bgClip="text"
             fontSize="5xl"
             fontWeight="extrabold"
