@@ -232,6 +232,23 @@ describeWithRedis("redis game repository", () => {
     expect(ttlAfter).toBeLessThan(ttlBefore);
   });
 
+  it("does not write or refresh the expiry for an identical update", async () => {
+    const created = await repository.createGame({
+      hostPlayerId: HOST_ID,
+      hostName: "Host",
+    });
+    const roomId = created.gameId;
+    const ttlBefore = await ttlOf(roomId);
+    await sleep(1_200);
+
+    const returned = await repository.updateGame(roomId, (state) => structuredClone(state));
+    expect(returned).toEqual(created);
+
+    const ttlAfter = await ttlOf(roomId);
+    expect(ttlAfter).toBeGreaterThan(0);
+    expect(ttlAfter).toBeLessThan(ttlBefore - 800);
+  });
+
   it("keeps only the newest 100 chat messages", async () => {
     const created = await repository.createGame({
       hostPlayerId: HOST_ID,
@@ -440,6 +457,27 @@ describeWithRedis("redis game repository", () => {
     const after = await repository.readGame(roomId);
     expect(JSON.stringify(after)).toBe(JSON.stringify(before));
     expect(await ttlOf(roomId)).toBeGreaterThan(0);
+  });
+
+  it("rejects a partially shaped state and preserves the stored room", async () => {
+    const created = await repository.createGame({
+      hostPlayerId: HOST_ID,
+      hostName: "Host",
+    });
+    const roomId = created.gameId;
+    const before = await repository.readGame(roomId);
+
+    const partial = {
+      gameStage: "stage:lobby",
+      players: [{ id: HOST_ID }],
+      publicCards: [],
+      messages: [],
+    };
+    await expect(
+      repository.updateGame(roomId, () => partial as unknown as ServerState),
+    ).rejects.toThrow(/next game state/);
+
+    expect(await repository.readGame(roomId)).toEqual(before);
   });
 
   it("stores the state a transition returns when it is asynchronous", async () => {

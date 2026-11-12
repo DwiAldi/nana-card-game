@@ -9,7 +9,7 @@ import {
   settleIfOverdue,
 } from "./game-engine";
 import { ForbiddenError, NotFoundError, storageFailure } from "./errors";
-import { ROOM_ID_PATTERN } from "./validation";
+import { CARD_ID_PATTERN, PLAYER_ID_PATTERN, ROOM_ID_PATTERN } from "./validation";
 
 /**
  * Atomic game store.
@@ -167,14 +167,79 @@ function parseState(raw: string): ServerState {
  * unexpected shape must never reach Redis: writing it would replace the room
  * with a broken document.
  */
-function isGameState(value: unknown): value is ServerState {
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const candidate = value as Partial<ServerState>;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function isCard(value: unknown): boolean {
+  if (!isPlainRecord(value)) return false;
   return (
-    typeof candidate.gameStage === "string" &&
-    Array.isArray(candidate.players) &&
-    Array.isArray(candidate.publicCards) &&
-    Array.isArray(candidate.messages)
+    (value.id === "" || (typeof value.id === "string" && CARD_ID_PATTERN.test(value.id))) &&
+    Number.isInteger(value.number) &&
+    Number(value.number) >= 1 &&
+    Number(value.number) <= 12 &&
+    typeof value.isRevealed === "boolean"
+  );
+}
+
+function isPlayer(value: unknown): boolean {
+  if (!isPlainRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    PLAYER_ID_PATTERN.test(value.id) &&
+    typeof value.name === "string" &&
+    value.name.length > 0 &&
+    value.name.length <= 40 &&
+    Number.isSafeInteger(value.seat) &&
+    Number(value.seat) >= 1 &&
+    (value.isHost === undefined || typeof value.isHost === "boolean") &&
+    (value.isWinner === undefined || typeof value.isWinner === "boolean") &&
+    (value.isPlaying === undefined || typeof value.isPlaying === "boolean") &&
+    Array.isArray(value.hand) &&
+    value.hand.every(isCard) &&
+    Array.isArray(value.collection) &&
+    value.collection.every(isCard)
+  );
+}
+
+function isMessage(value: unknown): boolean {
+  if (!isPlainRecord(value)) return false;
+  return (
+    typeof value.playerName === "string" &&
+    value.playerName.length > 0 &&
+    value.playerName.length <= 40 &&
+    Number.isFinite(value.timestamp) &&
+    typeof value.content === "string" &&
+    value.content.length > 0 &&
+    value.content.length <= 500
+  );
+}
+
+function isOptionalCardArray(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every(isCard));
+}
+
+function isGameState(value: unknown): value is ServerState {
+  if (!isPlainRecord(value)) return false;
+  return (
+    typeof value.gameId === "string" &&
+    ROOM_ID_PATTERN.test(value.gameId) &&
+    (value.gameStage === "stage:lobby" ||
+      value.gameStage === "stage:in-game" ||
+      value.gameStage === "stage:game-over") &&
+    (value.gameSubStage === undefined ||
+      value.gameSubStage === null ||
+      value.gameSubStage === "sub:playing" ||
+      value.gameSubStage === "sub:settling") &&
+    Number.isFinite(value.timestamp) &&
+    Array.isArray(value.players) &&
+    value.players.every(isPlayer) &&
+    isOptionalCardArray(value.cardDeck) &&
+    isOptionalCardArray(value.publicCards) &&
+    Array.isArray(value.messages) &&
+    value.messages.every(isMessage)
   );
 }
 

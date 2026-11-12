@@ -47,9 +47,9 @@ export const ROOM_ID_PATTERN = /^[a-z0-9]{4,32}$/;
  * ("1-a" .. "12-c") are rejected: they would let a client guess a hidden
  * card's number from its id.
  */
-const CARD_ID_PATTERN = /^[0-9a-f]{24}$/;
+export const CARD_ID_PATTERN = /^[0-9a-f]{24}$/;
 /** Player ids are 128-bit hex values minted by the server. */
-const PLAYER_ID_PATTERN = /^[a-f0-9]{32}$/;
+export const PLAYER_ID_PATTERN = /^[a-f0-9]{32}$/;
 
 /** C0 control characters and DEL have no place in user-facing text. */
 const CONTROL_CHARS_PATTERN = /[\u0000-\u001F\u007F]/;
