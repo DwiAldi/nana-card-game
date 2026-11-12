@@ -668,6 +668,20 @@ describe("settlement", () => {
     expect(next.players.map((p) => p.isWinner)).toEqual([false, false, false]);
   });
 
+  it("does not settle a game-over state even when the substage still says settling", () => {
+    // Pins the stage guard itself: with the substage set to settling, only the
+    // `gameStage !== "stage:in-game"` check can stop the settlement.
+    const state: ServerState = {
+      ...inGameState(),
+      gameStage: "stage:game-over",
+      gameSubStage: "sub:settling",
+    };
+    const next = settleIfOverdue(state, P2, NOW + SETTLE_DELAY_MS + 1);
+    expectUnchanged(state, next);
+    expect(next.gameStage).toBe("stage:game-over");
+    expect(next.gameSubStage).toBe("sub:settling");
+  });
+
   it("does not collect cards on a failed challenge but still passes the turn", () => {
     const state = settlingState({
       hands: { [P1]: [card("h1", 5, true)], [P2]: [card("h3", 6, true)] },
