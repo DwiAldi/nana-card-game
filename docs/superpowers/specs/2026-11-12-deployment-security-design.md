@@ -36,6 +36,12 @@ Resolve latest stable package versions from npm and inspect peer/runtime require
 
 Remove build-error suppression. Add an explicit typecheck script and deterministic CI installation. Any unresolved dependency advisory or peer incompatibility must be reported as a release limitation rather than hidden through forced installation or blanket overrides.
 
+## English translation
+
+The user requested English-only operation and explicitly asked to remove Chinese language support. Translate hard-coded Chinese UI, game rules, notifications, and remaining Chinese source comments and project specifications into natural English. Ensure the English resource covers every user-facing message. Remove the Chinese locale, language-switching UI and its references, and Chinese locale registration. Consolidate any unique information from the Chinese README into the English README, then remove the Chinese README and links to it. Maintain English deployment documentation. Preserve the meaning of game rules and technical specifications. Remove translation dependencies only if they become unused after simplifying the language infrastructure.
+
+Verify English message coverage and smoke-test English home, lobby, multiplayer, local bot play, game rules, errors, and notifications. Check maintained source and documentation for remaining Chinese text and confirm that no Chinese option or language switcher remains.
+
 ## Docker/VPS delivery
 
 Provide a multi-stage, non-root production image using Next standalone output and a supported Node LTS base. Add a Docker ignore file excluding Git metadata, local dependencies/build output, secrets, and development-only artifacts. Provide Compose services for the app and Redis; publish only the app on loopback by default and expose no Redis host port. Configure Redis authentication using deployment-provided environment values, persistent storage, health checks, and restart policies. Avoid baked-in secrets.
