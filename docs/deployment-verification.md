@@ -70,6 +70,20 @@ Verification at that checkpoint: lint (zero warnings), typecheck, 121 of 121 tes
 
 Not yet wired: the existing API routes still use the insecure legacy flow; route integration happens in stage 7, and Redis persistence hardening in stage 6. No production deployment has occurred.
 
+### Game engine, permissions, and viewer-scoped projection
+
+Commits `bc06195`, `dcf7531`, and `1552892` added the server-authoritative game engine and the public-state serializer:
+
+- `src/lib/server/game-engine.ts` — pure transitions taking the authenticated player ID and an explicit timestamp. Membership, host-only start, lobby-only joins, 2–6 player limit, current-player turn gating, and legal unrevealed-target validation are enforced before any state change; rejected actions leave the state byte-identical (verified by mutation testing of the immutability assertions).
+- Opaque card identity: deck cards receive 24-hex-character identifiers from `randomBytes(12)`, shuffled with cryptographic randomness. Min/max selection sorts by numeric value, never by identifier. Card-identifier validation in `src/lib/server/validation.ts` was updated to the opaque format (`/^[0-9a-f]{24}$/`); legacy value-bearing identifiers are rejected.
+- Settlement: a mismatch or three matching reveals enters the settling substage; after the two-second window settlement runs once, collecting matching cards, detecting all four victory conditions, concealing the remainder, and advancing the turn. Any authenticated member's poll may drive an overdue settlement so a disconnected current player cannot stall the room.
+- `src/lib/server/public-state.ts` — deny-by-default whitelist serializer producing `PublicCard` values (`{id, isRevealed:false}` or `{id, isRevealed:true, number}`). The viewer's own hand carries its own card numbers; every other hand stays concealed. Collected cards remain visible through conceal passes, removed cards leave stable empty slots, and session, token, digest, and deck fields are dropped even when injected into a fixture.
+- Deliberate hardening divergences from the legacy routes are documented in code: start is accepted only from the lobby (so a finished room is not replayable), re-revealing a revealed public card is a conflict rather than a silent no-op, a member re-joining a full room succeeds as a no-op, and any member may drive settlement. The approved specification contains no rematch requirement, so the stricter lobby-only gate stands.
+
+Verification at that checkpoint: lint (zero warnings), typecheck, 186 of 186 tests, and production build all pass. Spec-compliance and code-quality reviews passed; the review's findings (tautological immutability assertions, legacy card-identifier validation, viewer-invisible own hand, imprecise `min`/`max` typing, clone ordering, and two missing edge tests) were fixed in `dcf7531`, and the settlement stage guard is now pinned by a test in `1552892`.
+
+Stage 6 (atomic Redis persistence, expiry, and throttling) and stage 7 (route and client integration) remain; the API routes still serve the legacy protocol until stage 7 replaces them.
+
 ### Runtime image preflight
 
 Both official images were pulled successfully and their binaries executed:
