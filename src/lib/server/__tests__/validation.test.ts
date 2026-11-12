@@ -193,6 +193,16 @@ describe("field validators", () => {
     expect(() => validatePlayerName(42)).toThrow(BadRequestError);
   });
 
+  it("rejects C0 control characters in player names while trimming still works", () => {
+    // Interior control characters, including the U+001F and U+007F boundaries.
+    for (const name of ["Ald\u0000i", "\u001F", "Aldi\u007F", "Al\u000Bdi"]) {
+      expect(() => validatePlayerName(name)).toThrow(BadRequestError);
+    }
+    // Whitespace trimming is unaffected; the printable range U+0020+ is fine.
+    expect(validatePlayerName("  Aldi  ")).toBe("Aldi");
+    expect(validatePlayerName("Al di")).toBe("Al di");
+  });
+
   it("accepts chat messages up to 500 characters", () => {
     expect(validateChatMessage("hello")).toBe("hello");
     expect(validateChatMessage("a".repeat(MAX_CHAT_MESSAGE_LENGTH))).toHaveLength(500);
@@ -202,6 +212,13 @@ describe("field validators", () => {
     for (const message of ["", "   ", "a".repeat(MAX_CHAT_MESSAGE_LENGTH + 1)]) {
       expect(() => validateChatMessage(message)).toThrow(BadRequestError);
     }
+  });
+
+  it("rejects C0 control characters in chat messages while trimming still works", () => {
+    for (const message of ["hello\u0000world", "\u001F", "msg\u007F", "hi\u001Bthere"]) {
+      expect(() => validateChatMessage(message)).toThrow(BadRequestError);
+    }
+    expect(validateChatMessage("  hello there  ")).toBe("hello there");
   });
 
   it("validates room ids against a bounded ASCII format", () => {
@@ -279,6 +296,14 @@ describe("request body reading", () => {
     ).rejects.toMatchObject({ status: 400 });
   });
 
+  it("parses a valid JSON body split across multiple chunks", async () => {
+    // Exercises the byte-offset accumulation path: chunks must be joined at
+    // the right offsets before decoding, not merely concatenated.
+    await expect(
+      readJsonBody(streamRequest(['{"action":"hos', 't","name":"Ald', 'i"}'])),
+    ).resolves.toEqual({ action: "host", name: "Aldi" });
+  });
+
   it("does not trust an inflated Content-Length for small bodies", async () => {
     await expect(
       readJsonBody(jsonRequest(jsonBodyOfSize(64), { "content-length": "999999" })),
@@ -311,6 +336,24 @@ describe("request body reading", () => {
 
   it("rejects an empty body", async () => {
     await expect(readJsonBody(jsonRequest(""))).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("maps a mid-stream read error to a bad request, not a 503", async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('{"action":"host","na'));
+        controller.error(new Error("client went away"));
+      },
+    });
+    const request = new Request("https://cards.example.com/api/action", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: stream,
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+
+    await expect(readJsonBody(request)).rejects.toMatchObject({ status: 400 });
   });
 });
 

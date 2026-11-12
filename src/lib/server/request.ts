@@ -1,4 +1,4 @@
-import { ApiError, BadRequestError, ForbiddenError } from "./errors";
+import { BadRequestError, ForbiddenError, storageFailure } from "./errors";
 import { isProduction, type ServerConfig } from "./session";
 import { MAX_BODY_BYTES } from "./validation";
 
@@ -44,6 +44,12 @@ export async function readJsonBody(request: Request): Promise<unknown> {
       }
       chunks.push(value);
     }
+  } catch (error) {
+    if (error instanceof BadRequestError) throw error;
+    // The underlying stream rejected mid-read (client aborted or the
+    // connection dropped): surface it as a bad request, not a 503 that
+    // would blame the server.
+    throw new BadRequestError("Request body could not be read");
   } finally {
     await reader.cancel().catch(() => undefined);
   }
@@ -98,6 +104,6 @@ export function checkMutationOrigin(request: Request, config: ServerConfig): voi
   // A production deployment without APP_ORIGIN is a misconfiguration: fail
   // closed rather than trusting an unverifiable origin.
   if (isProduction(config)) {
-    throw new ApiError(503, "Service temporarily unavailable, please try again later");
+    throw storageFailure();
   }
 }

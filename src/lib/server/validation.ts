@@ -36,6 +36,13 @@ const CARD_ID_PATTERN = /^(1[0-2]|[1-9])-[a-z]$/;
 /** Player ids are 128-bit hex values minted by the server. */
 const PLAYER_ID_PATTERN = /^[a-f0-9]{32}$/;
 
+/** C0 control characters and DEL have no place in user-facing text. */
+const CONTROL_CHARS_PATTERN = /[\u0000-\u001F\u007F]/;
+
+function rejectControlCharacters(value: string, message: string): void {
+  if (CONTROL_CHARS_PATTERN.test(value)) throw new BadRequestError(message);
+}
+
 function requireObject(body: unknown): Record<string, unknown> {
   if (body == null || typeof body !== "object" || Array.isArray(body)) {
     throw new BadRequestError("Request body must be a JSON object");
@@ -74,6 +81,7 @@ export function validatePlayerName(value: unknown): string {
   if (typeof value !== "string") throw new BadRequestError("Player name must be text");
   const name = value.trim();
   if (name.length === 0) throw new BadRequestError("Player name is required");
+  rejectControlCharacters(name, "Player name must not contain control characters");
   if (name.length > MAX_PLAYER_NAME_LENGTH) {
     throw new BadRequestError(`Player name must be at most ${MAX_PLAYER_NAME_LENGTH} characters`);
   }
@@ -84,6 +92,7 @@ export function validateChatMessage(value: unknown): string {
   if (typeof value !== "string") throw new BadRequestError("Message must be text");
   const message = value.trim();
   if (message.length === 0) throw new BadRequestError("Message is required");
+  rejectControlCharacters(message, "Message must not contain control characters");
   if (message.length > MAX_CHAT_MESSAGE_LENGTH) {
     throw new BadRequestError(`Message must be at most ${MAX_CHAT_MESSAGE_LENGTH} characters`);
   }

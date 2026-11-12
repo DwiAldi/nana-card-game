@@ -48,6 +48,12 @@ describe("server configuration", () => {
     expect(loadServerConfig({ SESSION_TTL_SECONDS: "not-a-number" }).sessionTtlSeconds).toBe(3600);
     expect(loadServerConfig({ SESSION_TTL_SECONDS: "0" }).sessionTtlSeconds).toBe(3600);
   });
+
+  it("caps an oversized configured TTL at seven days", () => {
+    expect(loadServerConfig({ SESSION_TTL_SECONDS: "999999999" }).sessionTtlSeconds).toBe(604800);
+    expect(loadServerConfig({ SESSION_TTL_SECONDS: "604800" }).sessionTtlSeconds).toBe(604800);
+    expect(loadServerConfig({ SESSION_TTL_SECONDS: "604799" }).sessionTtlSeconds).toBe(604799);
+  });
 });
 
 describe("session issuance", () => {
@@ -60,9 +66,11 @@ describe("session issuance", () => {
 
   it("generates a separate server-owned player id", () => {
     const playerId = generatePlayerId();
-    expect(playerId).toMatch(/^[a-f0-9]{32}$/);
     const { token } = generateSessionToken();
-    expect(playerId).not.toBe(token);
+    // Player ids are 128-bit lowercase hex; tokens are base64url, so the
+    // two never share a format despite both being server-minted.
+    expect(playerId).toMatch(/^[a-f0-9]{32}$/);
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
   });
 
   it("issues distinct tokens and player ids per session", async () => {
@@ -102,9 +110,9 @@ describe("session issuance", () => {
   it("resolves a session by token and returns null for forged tokens", async () => {
     const store = new InMemorySessionStore();
     const session = await issueSession(store, productionConfig);
-    expect(await resolveSession(store, session.token)?.then((r) => r?.playerId)).toBe(
-      session.playerId,
-    );
+    const record = await resolveSession(store, session.token);
+    expect(record).not.toBeNull();
+    expect(record?.playerId).toBe(session.playerId);
     expect(await resolveSession(store, "forged-token")).toBeNull();
     expect(await resolveSession(store, null)).toBeNull();
   });
@@ -173,5 +181,11 @@ describe("cookie parsing", () => {
     expect(readSessionToken("other=1")).toBeNull();
     expect(readSessionToken(null)).toBeNull();
     expect(readSessionToken(undefined)).toBeNull();
+  });
+
+  it("tolerates whitespace around the cookie name and value", () => {
+    expect(readSessionToken(" nana_session = abc123 ")).toBe("abc123");
+    expect(readSessionToken("  nana_session=abc123")).toBe("abc123");
+    expect(readSessionToken("other=1;  nana_session =  t0k3n ")).toBe("t0k3n");
   });
 });

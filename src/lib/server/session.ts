@@ -13,6 +13,8 @@ import { createHash, randomBytes } from "node:crypto";
 export const SESSION_COOKIE_NAME = "nana_session";
 export const SESSION_TOKEN_BYTES = 32;
 export const DEFAULT_SESSION_TTL_SECONDS = 60 * 60;
+/** Upper bound on the accepted session window: seven days. */
+export const MAX_SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 /**
  * The minimal environment surface these modules read. Injectable so tests
@@ -36,8 +38,11 @@ export function loadServerConfig(env: ServerEnv = process.env): ServerConfig {
   const appOrigin = env.APP_ORIGIN?.trim() ? env.APP_ORIGIN.trim() : null;
 
   const parsedTtl = Number.parseInt(env.SESSION_TTL_SECONDS ?? "", 10);
-  const sessionTtlSeconds =
+  const configuredTtl =
     Number.isSafeInteger(parsedTtl) && parsedTtl > 0 ? parsedTtl : DEFAULT_SESSION_TTL_SECONDS;
+  // Cap the accepted window at seven days so a stray environment value
+  // cannot keep guest sessions alive indefinitely.
+  const sessionTtlSeconds = Math.min(configuredTtl, MAX_SESSION_TTL_SECONDS);
 
   return { nodeEnv, appOrigin, sessionTtlSeconds };
 }
@@ -122,12 +127,31 @@ export async function issueSession(
   return { token, playerId, expiresAt };
 }
 
+/**
+ * Resolves a session and returns the digest the lookup was keyed by alongside
+ * the record, so callers that refresh the record can reuse the digest without
+ * re-hashing the token. Internal; the public entry point is resolveSession.
+ */
+interface ResolvedSession {
+  readonly digest: string;
+  readonly record: SessionRecord;
+}
+
+async function resolveSessionWithDigest(
+  store: SessionStore,
+  token: string | null,
+): Promise<ResolvedSession | null> {
+  if (!token) return null;
+  const digest = hashSessionToken(token);
+  const record = await store.get(digest);
+  return record ? { digest, record } : null;
+}
+
 export async function resolveSession(
   store: SessionStore,
   token: string | null,
 ): Promise<SessionRecord | null> {
-  if (!token) return null;
-  return store.get(hashSessionToken(token));
+  return (await resolveSessionWithDigest(store, token))?.record ?? null;
 }
 
 /**
@@ -141,12 +165,14 @@ export async function reuseOrCreateSession(
   existingToken: string | null,
   now: () => number = Date.now,
 ): Promise<IssuedSession> {
-  const existing = await resolveSession(store, existingToken);
-  if (existing && existingToken) {
-    const expiresAt = now() + config.sessionTtlSeconds * 1000;
-    const record: SessionRecord = { ...existing, expiresAt };
-    await store.put(hashSessionToken(existingToken), record, config.sessionTtlSeconds);
-    return { token: existingToken, playerId: existing.playerId, expiresAt };
+  if (existingToken) {
+    const resolved = await resolveSessionWithDigest(store, existingToken);
+    if (resolved) {
+      const expiresAt = now() + config.sessionTtlSeconds * 1000;
+      const record: SessionRecord = { ...resolved.record, expiresAt };
+      await store.put(resolved.digest, record, config.sessionTtlSeconds);
+      return { token: existingToken, playerId: record.playerId, expiresAt };
+    }
   }
   return issueSession(store, config, now);
 }
