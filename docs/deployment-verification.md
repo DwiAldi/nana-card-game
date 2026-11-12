@@ -56,6 +56,20 @@ Commits `6cc5174`, `80b00a5`, and `82da0b9` upgraded every retained direct depen
 
 Audit at this checkpoint: 1 high and 8 moderate findings, all transitive/tooling (`typescript-eslint` chain, `lodash`, `minimatch`, `@babel/runtime`). Resolving or formally documenting the high finding remains a final-release blocker.
 
+### Server sessions and request validation
+
+Commits `4ca467f` and `7456ad3` added the first security layer under `src/lib/server/`, built test-first:
+
+- Explicit discriminated action union (`host`, `join`, `start`, `reveal-public`, `reveal-player`, `chat`) with strict unknown-property rejection; legacy `playerId`/`data`/`gameId` client envelopes are rejected.
+- Bounded identifier formats: rooms `[a-z0-9]{4,32}`, cards `1-12`/`[a-z]`, player IDs 32-char hex; names capped at 40 characters, chat messages at 500; C0 control characters rejected.
+- Request bodies are read through a byte-counting stream reader capped at 8192 bytes regardless of `Content-Length`; client-abort read errors map to 400, malformed input to 400, and internal failures to a generic 503 with no internals leaked. All JSON responses carry `Cache-Control: no-store`.
+- Sessions: server-generated 32-byte random token (base64url) plus a separate server-generated player ID; the store keys on the SHA-256 token digest; tokens never appear in JSON responses or stored records. Cookie is `HttpOnly; SameSite=Strict; Path=/`, `Secure` in production, TTL bounded to 7 days, sliding refresh, and valid sessions are reused for joins/hosting.
+- Origin enforcement: production mutations require an `Origin` matching `APP_ORIGIN` exactly; cross-site fetch metadata is rejected; forwarded headers are ignored; a missing `APP_ORIGIN` in production fails closed.
+
+Verification at that checkpoint: lint (zero warnings), typecheck, 121 of 121 tests, and production build all pass. Spec-compliance and code-quality reviews passed; the quality review's minor items (shared error constructor, TTL cap, control-character rejection, stream-abort mapping, chunk and cookie-parser test coverage) were fixed in `7456ad3`.
+
+Not yet wired: the existing API routes still use the insecure legacy flow; route integration happens in stage 7, and Redis persistence hardening in stage 6. No production deployment has occurred.
+
 ### Runtime image preflight
 
 Both official images were pulled successfully and their binaries executed:
