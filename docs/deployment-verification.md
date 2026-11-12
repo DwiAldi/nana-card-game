@@ -114,6 +114,28 @@ Final stage-6 verification: lint with zero warnings, typecheck, production build
 - Room identifiers are now minted by the server. The client must navigate with the identifier returned by the host response instead of the client-generated one.
 - Redis configuration and unavailability errors are not API errors and map to the generic 503 through the central error mapper without exposing the connection string.
 
+### Secured API and multiplayer client integration (stage 7)
+
+Commits `782d0fc`, `b3d7dd2`, `ebf4fe0`, and `19824a7` completed the route/client migration and its runtime hardening:
+
+- Both API routes now delegate to the shared secure orchestration layer. Browser requests use only the strict action payloads and the server-issued session cookie; client-supplied identity is rejected. Host navigation uses the server-generated room ID, polling restores the authenticated viewer, and sanitized server errors plus retry delays reach the UI.
+- Unauthenticated host and join requests consume the global bootstrap budget before session creation. A session created for a failed host/join attempt is deleted, while valid returning sessions bypass the bootstrap budget and retain their per-session limits.
+- Multiplayer rendering consumes the viewer-scoped discriminated card projection. A viewer's own cards are represented as visible values, opponents remain concealed and numberless, and shared local-mode components use a separate display-only card interface. Opaque card IDs are never used to derive faces.
+- Retried min/max reveals capture the concrete card precondition inside the repository transition closure without mutating the action object. A changed target fails rather than revealing a different card on retry.
+- Chakra UI 3.38 documents an Emotion hydration defect under Next.js Turbopack with the exact observed `data-emotion="css-global"` mismatch. Commit `19824a7` applies Chakra's prescribed workaround by using `next dev --webpack` and `next build --webpack`; no hydration suppression was added. Next's generated `AGENTS.md` is tracked as requested by Next 16.4.6.
+
+Fresh stage-7 verification after the final change:
+
+- `npm run lint`: passed with zero warnings.
+- `npm run typecheck`: passed after route type generation.
+- `npm run test:run`: 249 passed, with 46 Redis integration tests explicitly skipped because `TEST_REDIS_URL` was absent.
+- `TEST_REDIS_URL=redis://127.0.0.1:16379 npm run test:run`: 292 of 292 passed against disposable Redis 8.10.3.
+- `npm run build`: the standalone Webpack production build completed successfully. Webpack emitted cache-serialization performance warnings only; TypeScript, compilation, static generation, and build tracing completed.
+- A real HTTP smoke test with two isolated cookie jars passed host, join, start, poll, reveal, chat, and reload continuity; wrong-turn mutation returned 403, missing session 401, legacy identity spoofing 400, and foreign origin 403. Each viewer saw only their own hand values, hidden IDs were opaque, and response JSON contained no session material.
+- A headless Chromium smoke test used two isolated browser contexts and asserted host-only Start controls, independent sessions, client navigation, and visible/hidden card rendering. It also started local bot mode and rendered `/deal-multi-player`, `/deal-poker`, `/flip-card`, `/switch-container`, and `/sounds`. The harness failed on any `Runtime.exceptionThrown` hydration message and completed with zero hydration errors. Screenshot: `/tmp/opencode/nana-browser-smoke.png`.
+
+No public deployment was performed. Docker/VPS delivery remains stage 8.
+
 ### Runtime image preflight
 
 Both official images were pulled successfully and their binaries executed:
