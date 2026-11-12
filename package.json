@@ -6,8 +6,8 @@
     "node": ">=26.13.1 <27"
   },
   "scripts": {
-    "dev": "next dev -p 2333",
-    "build": "next build",
+    "dev": "next dev --webpack -p 2333",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
