@@ -23,8 +23,9 @@ import { ROOM_ID_PATTERN } from "./validation";
  *   never overwritten and the room always carries an idle expiry.
  * - `updateGame` watches the room key, reads the current state, applies the
  *   transition to a clone and writes the result with `EX <ttl>` inside the
- *   same transaction. A conflicting write is retried a bounded number of
- *   times and then reported as a 409.
+ *   same transaction. A conflicting write is retried at most
+ *   {@link MAX_UPDATE_RETRIES} times (six attempts in total) and then
+ *   reported as a 409.
  * - `readGame` is a pure read: it never rewrites the document and never
  *   extends the idle expiry.
  * - Settlement runs through `updateGame`, so there is exactly one write path
@@ -40,8 +41,23 @@ export const GAME_TTL_SECONDS = 60 * 60;
 export const MAX_CHAT_MESSAGES = 100;
 /** Attempts allowed to mint a non-colliding room id. */
 export const MAX_ROOM_ID_ATTEMPTS = 5;
-/** Attempts allowed to settle a conflicting transaction. */
-export const MAX_UPDATE_ATTEMPTS = 5;
+/**
+ * Retries allowed after the first attempt when the watched transaction
+ * conflicts with a concurrent write.
+ *
+ * The plan budgets "retry conflicts at most five times, then return 409",
+ * so an update makes at most one initial attempt plus five retries before
+ * the conflict is reported to the caller.
+ */
+export const MAX_UPDATE_RETRIES = 5;
+/**
+ * Total attempts of one update: the initial attempt plus the retries.
+ *
+ * `MAX_UPDATE_ATTEMPTS - 1` retries are performed, so a conflicting update
+ * is attempted at most `MAX_UPDATE_ATTEMPTS` times and then reported as a
+ * 409 conflict.
+ */
+export const MAX_UPDATE_ATTEMPTS = MAX_UPDATE_RETRIES + 1;
 /** Length of a generated room id. */
 export const ROOM_ID_LENGTH = 10;
 
@@ -70,11 +86,12 @@ export interface CreateGameInput {
 /**
  * A transition applied to the current state of a room.
  *
- * The transition receives a clone and returns the next state. It must not
- * mutate anything outside the clone and must throw an `ApiError` to reject
- * the change.
+ * The transition receives a clone and returns the next state. It may be
+ * asynchronous: the repository awaits the result and validates its shape
+ * before anything is written. It must not mutate anything outside the
+ * clone and must throw an `ApiError` to reject the change.
  */
-export type GameTransition = (state: ServerState) => ServerState;
+export type GameTransition = (state: ServerState) => ServerState | Promise<ServerState>;
 
 /**
  * Storage contract for game rooms.
@@ -141,6 +158,24 @@ function parseState(raw: string): ServerState {
     // A corrupt document is a storage problem, not a client problem.
     throw storageFailure();
   }
+}
+
+/**
+ * Checks that a transition produced something that can be stored as a room.
+ *
+ * A transition that returns `undefined`, an unawaited promise, or any other
+ * unexpected shape must never reach Redis: writing it would replace the room
+ * with a broken document.
+ */
+function isGameState(value: unknown): value is ServerState {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value as Partial<ServerState>;
+  return (
+    typeof candidate.gameStage === "string" &&
+    Array.isArray(candidate.players) &&
+    Array.isArray(candidate.publicCards) &&
+    Array.isArray(candidate.messages)
+  );
 }
 
 /**
@@ -241,9 +276,11 @@ export class RedisGameRepository implements GameRepository {
         if (raw === null) throw new NotFoundError("Game not found");
 
         const current = parseState(raw);
-        const next = transition(structuredClone(current));
-        if (!next || typeof next !== "object") {
-          throw new Error("A game transition must return the next state");
+        // The transition may be asynchronous; awaiting it here keeps a
+        // promise from being serialized as an empty document.
+        const next = await transition(structuredClone(current));
+        if (!isGameState(next)) {
+          throw new Error("A game transition must return the next game state");
         }
         const bounded = boundChat(next);
 

@@ -391,4 +391,71 @@ describeWithRedis("redis game repository", () => {
       repository.updateGame("missingroom", (state) => state),
     ).rejects.toThrow();
   });
+
+  it("retries a conflicting transaction five times and then reports a conflict", async () => {
+    const created = await repository.createGame({
+      hostPlayerId: HOST_ID,
+      hostName: "Host",
+    });
+    const roomId = created.gameId;
+
+    // Writing to the watched key from another connection makes the
+    // transaction's EXEC fail with a watch conflict, so every attempt
+    // conflicts. The transition also changes the state, otherwise the
+    // repository skips the write and no conflict can occur.
+    let attempts = 0;
+    const error = await repository
+      .updateGame(roomId, async (state) => {
+        attempts += 1;
+        const changed: ServerState = {
+          ...state,
+          players: state.players.map((player) => ({ ...player, name: `Host ${attempts}` })),
+        };
+        await admin.set(gameKey(roomId), JSON.stringify(changed));
+        return changed;
+      })
+      .then(
+        () => null,
+        (caught: unknown) => caught,
+      );
+
+    expect(error).toBeInstanceOf(ConflictError);
+    expect((error as ConflictError).status).toBe(409);
+    // One initial attempt plus five retries.
+    expect(attempts).toBe(6);
+  });
+
+  it("does not overwrite the room when a transition returns an unusable value", async () => {
+    const created = await repository.createGame({
+      hostPlayerId: HOST_ID,
+      hostName: "Host",
+    });
+    const roomId = created.gameId;
+    const before = await repository.readGame(roomId);
+
+    await expect(
+      repository.updateGame(roomId, () => ({}) as unknown as ServerState),
+    ).rejects.toThrow();
+
+    const after = await repository.readGame(roomId);
+    expect(JSON.stringify(after)).toBe(JSON.stringify(before));
+    expect(await ttlOf(roomId)).toBeGreaterThan(0);
+  });
+
+  it("stores the state a transition returns when it is asynchronous", async () => {
+    const created = await repository.createGame({
+      hostPlayerId: HOST_ID,
+      hostName: "Host",
+    });
+    const roomId = created.gameId;
+
+    const updated = await repository.updateGame(roomId, async (state) => {
+      await sleep(5);
+      return { ...state, gameStage: "stage:in-game" as const };
+    });
+
+    expect(updated.gameStage).toBe("stage:in-game");
+    const stored = await repository.readGame(roomId);
+    expect(stored?.gameStage).toBe("stage:in-game");
+  });
 });
