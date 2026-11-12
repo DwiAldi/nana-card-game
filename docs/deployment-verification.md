@@ -26,6 +26,16 @@ Sources:
 
 Implementation and release verification are in progress. No production deployment has been performed, and no readiness claim is made yet.
 
+### English-only conversion
+
+Commits `2f79a29` and `16594c2` removed the Chinese locale, language selector, Chinese README, and i18next runtime dependencies. Maintained source, specifications, and primary documentation were translated to English. Verification at that checkpoint:
+
+- Unicode Han scan: no matches in maintained `src`, `specs`, `README.md`, or `docs`.
+- Bot suite: 52 of 52 tests passed.
+- Scope review and code-quality review: passed after correcting the homepage repository link and restoring a literal rules translation.
+
+The TypeScript failures from initial triage remained and are assigned to the framework modernization stage.
+
 ### Runtime image preflight
 
 Both official images were pulled successfully and their binaries executed:
