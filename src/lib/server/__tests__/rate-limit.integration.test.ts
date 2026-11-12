@@ -40,10 +40,16 @@ const KEY_PREFIX = `nana-itest:${RUN_ID}:`;
 
 const SUBJECT = "player-0123456789abcdef";
 
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+const pollUntil = async (
+  predicate: () => Promise<boolean>,
+  timeoutMs = 5_000,
+): Promise<void> => {
+  const deadline = Date.now() + timeoutMs;
+  while (!(await predicate())) {
+    if (Date.now() >= deadline) throw new Error("Timed out waiting for Redis state");
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+};
 
 let admin: RedisClientType;
 
@@ -149,7 +155,7 @@ describeWithRedis("redis rate limiter", () => {
     expect(ttl).toBeLessThanOrEqual(3_000);
 
     // The counter does not survive its window.
-    await sleep(2_500);
+    await pollUntil(async () => (await admin.exists(keys[0])) === 0);
     expect(await admin.exists(keys[0])).toBe(0);
   });
 
@@ -191,20 +197,4 @@ describeWithRedis("redis rate limiter", () => {
     expect(denied.remaining).toBe(0);
   });
 
-  it("reuses the loaded script instead of sending it again", async () => {
-    const prefix = `${KEY_PREFIX}script:`;
-    const counter = new RedisRateLimitCounter();
-    const limiter = new FixedWindowRateLimiter({
-      keyPrefix: prefix,
-      counter,
-      budgets: { poll: { limit: 5, windowSeconds: 60 } },
-    });
-
-    await limiter.check({ kind: "poll", subject: SUBJECT });
-    await limiter.check({ kind: "poll", subject: SUBJECT });
-
-    const keys = await listKeys(`${prefix}*`);
-    expect(keys).toHaveLength(1);
-    expect(Number(await admin.get(keys[0]))).toBe(2);
-  });
 });

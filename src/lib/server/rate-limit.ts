@@ -372,7 +372,10 @@ export class FixedWindowRateLimiter implements RateLimiter {
     if (!budget) throw new Error(`Unknown rate limit kind: ${String(request.kind)}`);
 
     const window = computeRateLimitWindow(this.now(), budget.windowSeconds);
-    const ttlSeconds = budget.windowSeconds + this.lingerSeconds;
+    const ttlSeconds = window.resetSeconds + this.lingerSeconds;
+    if (!Number.isSafeInteger(ttlSeconds) || ttlSeconds < 1) {
+      throw new Error("Invalid rate limit TTL");
+    }
 
     if (request.kind === "create") {
       return this.checkCreation(budget, window, ttlSeconds, request);
@@ -473,9 +476,14 @@ function isNoScriptError(error: unknown): boolean {
 export class RedisRateLimitCounter implements RateLimitCounter {
   private scriptSha: string | null = null;
 
+  constructor(private readonly getClient: () => Promise<RedisClientType> = getRedis) {}
+
   async increment(key: string, ttlSeconds: number): Promise<number> {
-    const client = await getRedis();
-    const ttl = Math.max(1, Math.floor(ttlSeconds));
+    const ttl = Math.floor(ttlSeconds);
+    if (!Number.isSafeInteger(ttl) || ttl < 1) {
+      throw new Error("Invalid rate limit TTL");
+    }
+    const client = await this.getClient();
 
     if (this.scriptSha) {
       try {

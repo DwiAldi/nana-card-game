@@ -43,10 +43,16 @@ const RUN_ID = `${process.pid.toString(36)}-${Date.now().toString(36)}-${Math.ra
   .slice(2, 8)}`;
 const KEY_PREFIX = `nana-itest:${RUN_ID}:`;
 
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+const pollUntil = async (
+  predicate: () => Promise<boolean>,
+  timeoutMs = 5_000,
+): Promise<void> => {
+  const deadline = Date.now() + timeoutMs;
+  while (!(await predicate())) {
+    if (Date.now() >= deadline) throw new Error("Timed out waiting for Redis state");
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+};
 
 const config = (sessionTtlSeconds: number): ServerConfig => ({
   nodeEnv: "test",
@@ -123,7 +129,7 @@ describeWithRedis("redis session store", () => {
     expect(await resolveSession(store, session.token)).not.toBeNull();
     expect(await admin.exists(sessionKey(session.token))).toBe(1);
 
-    await sleep(1_500);
+    await pollUntil(async () => (await resolveSession(store, session.token)) === null);
 
     expect(await resolveSession(store, session.token)).toBeNull();
     expect(await admin.exists(sessionKey(session.token))).toBe(0);
@@ -137,7 +143,7 @@ describeWithRedis("redis session store", () => {
     const redisSession = await issueSession(store, redisConfig);
     const memorySession = await issueSession(memory, memoryConfig);
 
-    await sleep(1_100);
+    await pollUntil(async () => (await admin.pTTL(sessionKey(redisSession.token))) <= 900);
 
     const reused = await reuseOrCreateSession(store, redisConfig, redisSession.token);
     const reusedMemory = await reuseOrCreateSession(memory, memoryConfig, memorySession.token);
@@ -153,9 +159,86 @@ describeWithRedis("redis session store", () => {
     expect(ttl).toBeGreaterThan(1_000);
 
     // The original expiry has passed, the refreshed session is still alive.
-    await sleep(1_100);
+    await pollUntil(async () => Date.now() > redisSession.expiresAt);
     expect(await resolveSession(store, redisSession.token)).not.toBeNull();
     expect(await resolveSession(memory, memorySession.token)).not.toBeNull();
+  });
+
+  it("rejects and deletes a logically expired record whose Redis key remains", async () => {
+    const digest = "b".repeat(64);
+    const key = `${KEY_PREFIX}session:${digest}`;
+    const now = 50_000;
+    const clockedStore = new RedisSessionStore({ keyPrefix: KEY_PREFIX, now: () => now });
+    await admin.set(
+      key,
+      JSON.stringify({ playerId: "a".repeat(32), createdAt: 10_000, expiresAt: now }),
+      { EX: 60 },
+    );
+
+    await expect(clockedStore.get(digest)).resolves.toBeNull();
+    expect(await admin.exists(key)).toBe(0);
+  });
+
+  it("rejects and deletes a record with reversed chronology", async () => {
+    const digest = "c".repeat(64);
+    const key = `${KEY_PREFIX}session:${digest}`;
+    const clockedStore = new RedisSessionStore({ keyPrefix: KEY_PREFIX, now: () => 20_000 });
+    await admin.set(
+      key,
+      JSON.stringify({ playerId: "a".repeat(32), createdAt: 40_000, expiresAt: 30_000 }),
+      { EX: 60 },
+    );
+
+    await expect(clockedStore.get(digest)).resolves.toBeNull();
+    expect(await admin.exists(key)).toBe(0);
+  });
+
+  it("rejects and deletes a record with an invalid player id", async () => {
+    const digest = "d".repeat(64);
+    const key = `${KEY_PREFIX}session:${digest}`;
+    const clockedStore = new RedisSessionStore({ keyPrefix: KEY_PREFIX, now: () => 20_000 });
+    await admin.set(
+      key,
+      JSON.stringify({ playerId: "not-a-player", createdAt: 10_000, expiresAt: 30_000 }),
+      { EX: 60 },
+    );
+
+    await expect(clockedStore.get(digest)).resolves.toBeNull();
+    expect(await admin.exists(key)).toBe(0);
+  });
+
+  it("never stores a key beyond the record's logical expiry", async () => {
+    const digest = "e".repeat(64);
+    const key = `${KEY_PREFIX}session:${digest}`;
+    const now = 100_000;
+    const clockedStore = new RedisSessionStore({ keyPrefix: KEY_PREFIX, now: () => now });
+
+    await clockedStore.put(
+      digest,
+      { playerId: "a".repeat(32), createdAt: now, expiresAt: now + 250 },
+      60,
+    );
+
+    const ttl = await admin.pTTL(key);
+    expect(ttl).toBeGreaterThan(0);
+    expect(ttl).toBeLessThanOrEqual(250);
+  });
+
+  it("deletes and rejects an already-expired record on put", async () => {
+    const digest = "f".repeat(64);
+    const key = `${KEY_PREFIX}session:${digest}`;
+    const now = 100_000;
+    const clockedStore = new RedisSessionStore({ keyPrefix: KEY_PREFIX, now: () => now });
+    await admin.set(key, "stale", { EX: 60 });
+
+    await expect(
+      clockedStore.put(
+        digest,
+        { playerId: "a".repeat(32), createdAt: now - 1_000, expiresAt: now },
+        60,
+      ),
+    ).rejects.toBeInstanceOf(Error);
+    expect(await admin.exists(key)).toBe(0);
   });
 
   it("issues a fresh session when the presented token is unknown", async () => {

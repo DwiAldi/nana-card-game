@@ -1,12 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   RATE_LIMIT_BUDGETS,
   FixedWindowRateLimiter,
+  RedisRateLimitCounter,
   hashRateLimitSubject,
   readTrustedClientIp,
   type RateLimitCounter,
 } from "@/lib/server/rate-limit";
 import { BadRequestError } from "@/lib/server/errors";
+import type { RedisClientType } from "redis";
 
 /**
  * Unit tests for the fixed-window rate limiter.
@@ -21,12 +23,14 @@ import { BadRequestError } from "@/lib/server/errors";
 /** A counter that behaves like the Redis script: INCR plus EXPIRE on the first hit. */
 class FakeCounter implements RateLimitCounter {
   readonly keys: string[] = [];
+  readonly ttls: number[] = [];
   private readonly entries = new Map<string, { count: number; expiresAt: number }>();
 
   constructor(private readonly now: () => number = Date.now) {}
 
   async increment(key: string, ttlSeconds: number): Promise<number> {
     this.keys.push(key);
+    this.ttls.push(ttlSeconds);
     const nowMs = this.now();
     const entry = this.entries.get(key);
     if (!entry || entry.expiresAt <= nowMs) {
@@ -106,6 +110,33 @@ describe("rate limit budgets", () => {
 });
 
 describe("rate limit windows", () => {
+  it("expires a counter at the window boundary plus linger", async () => {
+    const counter = new FakeCounter();
+    const limiter = new FixedWindowRateLimiter({
+      counter,
+      now: () => 3_599_000,
+      lingerSeconds: 5,
+    });
+
+    const result = await limiter.check({ kind: "host", subject: SUBJECT });
+
+    expect(result.resetSeconds).toBe(1);
+    expect(counter.ttls).toEqual([6]);
+  });
+
+  it("keeps an ordinary counter through the active window plus linger", async () => {
+    const counter = new FakeCounter();
+    const limiter = new FixedWindowRateLimiter({
+      counter,
+      now: () => 0,
+      lingerSeconds: 5,
+    });
+
+    await limiter.check({ kind: "host", subject: SUBJECT });
+
+    expect(counter.ttls).toEqual([3_605]);
+  });
+
   it("starts a new window when the previous one rolls over", async () => {
     let nowMs = 1_000_000;
     const counter = new FakeCounter(() => nowMs);
@@ -144,6 +175,59 @@ describe("rate limit windows", () => {
     const allowed = await limiter.check({ kind: "action", subject: SUBJECT });
     expect(allowed.retryAfterSeconds).toBe(0);
     expect(allowed.resetSeconds).toBeGreaterThan(0);
+  });
+});
+
+describe("redis script cache", () => {
+  it("loads once and then reuses EVALSHA without plain EVAL", async () => {
+    const client = {
+      scriptLoad: vi.fn().mockResolvedValue("script-sha"),
+      evalSha: vi.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(2),
+      eval: vi.fn(),
+    } as unknown as RedisClientType;
+    const counter = new RedisRateLimitCounter(async () => client);
+
+    await expect(counter.increment("rl:test", 60)).resolves.toBe(1);
+    await expect(counter.increment("rl:test", 60)).resolves.toBe(2);
+
+    expect(client.scriptLoad).toHaveBeenCalledTimes(1);
+    expect(client.evalSha).toHaveBeenCalledTimes(2);
+    expect(client.eval).not.toHaveBeenCalled();
+  });
+
+  it("recovers atomically when the cached script is evicted", async () => {
+    const noScript = new Error("NOSCRIPT No matching script. Please use EVAL.");
+    const client = {
+      scriptLoad: vi.fn().mockResolvedValueOnce("first-sha").mockResolvedValueOnce("second-sha"),
+      evalSha: vi
+        .fn()
+        .mockResolvedValueOnce(1)
+        .mockRejectedValueOnce(noScript)
+        .mockRejectedValueOnce(noScript),
+      eval: vi.fn().mockResolvedValue(2),
+    } as unknown as RedisClientType;
+    const counter = new RedisRateLimitCounter(async () => client);
+
+    await expect(counter.increment("rl:test", 60)).resolves.toBe(1);
+    await expect(counter.increment("rl:test", 60)).resolves.toBe(2);
+
+    expect(client.scriptLoad).toHaveBeenCalledTimes(2);
+    expect(client.evalSha).toHaveBeenCalledTimes(3);
+    expect(client.eval).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects an unsafe script TTL before issuing a Redis command", async () => {
+    const client = {
+      scriptLoad: vi.fn(),
+      evalSha: vi.fn(),
+      eval: vi.fn(),
+    } as unknown as RedisClientType;
+    const counter = new RedisRateLimitCounter(async () => client);
+
+    await expect(counter.increment("rl:test", Number.MAX_SAFE_INTEGER + 1)).rejects.toThrow(
+      "Invalid rate limit TTL",
+    );
+    expect(client.scriptLoad).not.toHaveBeenCalled();
   });
 });
 
