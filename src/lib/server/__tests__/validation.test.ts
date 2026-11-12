@@ -8,6 +8,7 @@ import {
 } from "@/lib/server/errors";
 import { checkMutationOrigin, readJsonBody } from "@/lib/server/request";
 import type { ServerConfig } from "@/lib/server/session";
+import { defaultGameEngineDeps } from "@/lib/server/game-engine";
 import {
   MAX_BODY_BYTES,
   MAX_CHAT_MESSAGE_LENGTH,
@@ -98,9 +99,10 @@ describe("action parsing", () => {
   });
 
   it("parses a public reveal action with room and card id", () => {
+    const cardId = "0123456789abcdef01234567";
     expect(
-      parseActionInput({ action: "reveal-public", roomId: "m3xk9p2f", cardId: "7-b" }),
-    ).toEqual({ action: "reveal-public", roomId: "m3xk9p2f", cardId: "7-b" });
+      parseActionInput({ action: "reveal-public", roomId: "m3xk9p2f", cardId }),
+    ).toEqual({ action: "reveal-public", roomId: "m3xk9p2f", cardId });
   });
 
   it("parses a player reveal action with room, target player and min/max", () => {
@@ -229,12 +231,43 @@ describe("field validators", () => {
     }
   });
 
-  it("validates card ids against the known card format", () => {
-    for (const cardId of ["1-a", "9-c", "10-b", "12-a"]) {
+  it("validates card ids as opaque server-minted identifiers", () => {
+    for (const cardId of [
+      "0123456789abcdef01234567",
+      "a".repeat(24),
+      "000000000000000000000000",
+    ]) {
       expect(validateCardId(cardId)).toBe(cardId);
     }
-    for (const cardId of ["13-a", "0-a", "1-", "1-cc", "2-A", "card-1"]) {
+  });
+
+  it("rejects legacy value-bearing card ids", () => {
+    // "7-a" and friends encode the card's number, so a hidden card's value
+    // could be guessed from its id; only opaque ids are accepted now.
+    for (const cardId of [
+      "7-a",
+      "1-a",
+      "12-c",
+      "13-a",
+      "0-a",
+      "1-",
+      "1-cc",
+      "2-A",
+      "card-1",
+      "0123456789abcdef0123456",
+      "0123456789abcdef012345678",
+      "0123456789ABCDEF01234567",
+      "0123456789abcdef0123456g",
+    ]) {
       expect(() => validateCardId(cardId)).toThrow(BadRequestError);
+    }
+  });
+
+  it("accepts the opaque card ids the engine actually mints", () => {
+    for (let i = 0; i < 16; i++) {
+      const cardId = defaultGameEngineDeps.generateCardId();
+      expect(cardId).toMatch(/^[0-9a-f]{24}$/);
+      expect(validateCardId(cardId)).toBe(cardId);
     }
   });
 

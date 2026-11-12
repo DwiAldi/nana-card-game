@@ -1,6 +1,15 @@
 import { Card, Player, ServerState } from "@/types";
 import { sum7Pairs } from "@/lib/rules";
 
+/**
+ * The two reveal choices a player can make.
+ *
+ * Defined here so this client-shared module never has to import the
+ * server-only validation layer; the server re-exports the very same union
+ * from its action parser.
+ */
+export type MinMax = "min" | "max";
+
 export const allRevealedCards = (serverState: ServerState) => {
   const revealedCards: Card[] = [];
   serverState.players.forEach((p) =>
@@ -76,7 +85,7 @@ export const sortByNumberDesc = (a: Card, b: Card): number => sortByNumberAsc(b,
 
 export function findUnrevealedCardId(
   cards: Card[] | undefined,
-  minMax: string | "max" | "min",
+  minMax: MinMax,
 ): string | undefined {
   if (!cards) return undefined;
   const unrevealed = cards.filter((c) => !c.isRevealed);

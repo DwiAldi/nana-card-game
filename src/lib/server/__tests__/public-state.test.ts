@@ -89,7 +89,24 @@ const fixtureState = (): ServerState => ({
   messages: [{ playerName: "Player 2", content: "hi", timestamp: NOW }],
 });
 
+/** Every hidden number in the fixture, including the hidden public slot. */
 const HIDDEN_VALUES = [2, 5, 7, 11, 12];
+
+/** The hidden numbers each player holds in the fixture. */
+const HIDDEN_VALUES_BY_PLAYER: Record<string, number[]> = {
+  [P1]: [5, 7],
+  [P2]: [12, 2],
+  [P3]: [],
+};
+
+/**
+ * Hidden numbers that must not appear in `viewerId`'s view: every hidden
+ * value except the ones the viewer legitimately owns and may see.
+ */
+const foreignHiddenValues = (viewerId: string): number[] => {
+  const own = HIDDEN_VALUES_BY_PLAYER[viewerId] ?? [];
+  return HIDDEN_VALUES.filter((value) => !own.includes(value));
+};
 
 const expectNoHiddenValueLeak = (publicState: unknown, hiddenValues: number[] = HIDDEN_VALUES): void => {
   const serialized = JSON.stringify(publicState);
@@ -114,25 +131,70 @@ const expectNoSessionMaterial = (publicState: unknown): void => {
 };
 
 describe("toPublicState", () => {
-  it("exposes hidden hand cards as { id, isRevealed: false } with no number", () => {
+  it("shows the viewer's own hidden hand cards with their numbers", () => {
     const publicState = toPublicState(fixtureState(), P1);
-    const me = publicState.players.find((p) => p.id === P1);
-    expect(me).toBeDefined();
-    const hiddenCards = me!.hand.filter((c) => !c.isRevealed);
+    const me = publicState.players.find((p) => p.id === P1)!;
+    expect(me.hand).toEqual([
+      { id: "opaque-h1", isRevealed: true, number: 5 },
+      { id: "7-a", isRevealed: true, number: 7 },
+      { id: "opaque-r1", isRevealed: true, number: 9 },
+    ]);
+  });
+
+  it("gives every viewer their own hand numbers and nobody else's", () => {
+    const expectedOwnNumbers: Record<string, number[]> = {
+      [P1]: [5, 7, 9],
+      [P2]: [12, 2],
+      [P3]: [],
+    };
+    for (const [viewerId, expected] of Object.entries(expectedOwnNumbers)) {
+      const publicState = toPublicState(fixtureState(), viewerId);
+      const me = publicState.players.find((p) => p.id === viewerId)!;
+      expect(me.hand.map(cardNumber).sort((a, b) => a - b)).toEqual(
+        [...expected].sort((a, b) => a - b),
+      );
+    }
+  });
+
+  it("conceals other players' hidden hand cards as { id, isRevealed: false } with no number", () => {
+    const publicState = toPublicState(fixtureState(), P3);
+    const player1 = publicState.players.find((p) => p.id === P1)!;
+    const hiddenCards = player1.hand.filter((c) => !c.isRevealed);
     expect(hiddenCards.map((c) => c.id).sort()).toEqual(["7-a", "opaque-h1"].sort());
     for (const hiddenCard of hiddenCards) {
       expect(hiddenCard).not.toHaveProperty("number");
       expect(Object.keys(hiddenCard).sort()).toEqual(["id", "isRevealed"]);
     }
-    const revealedCard = me!.hand.find((c) => c.isRevealed)!;
+    const revealedCard = player1.hand.find((c) => c.isRevealed)!;
     expect(revealedCard).toEqual({ id: "opaque-r1", isRevealed: true, number: 9 });
     expect(Object.keys(revealedCard).sort()).toEqual(["id", "isRevealed", "number"]);
   });
 
-  it("never serializes a known hidden number anywhere in the payload", () => {
-    expectNoHiddenValueLeak(toPublicState(fixtureState(), P1));
-    expectNoHiddenValueLeak(toPublicState(fixtureState(), P2));
-    expectNoHiddenValueLeak(toPublicState(fixtureState(), P3));
+  it("never serializes another player's known hidden number anywhere in the payload", () => {
+    expectNoHiddenValueLeak(toPublicState(fixtureState(), P1), foreignHiddenValues(P1));
+    expectNoHiddenValueLeak(toPublicState(fixtureState(), P2), foreignHiddenValues(P2));
+    expectNoHiddenValueLeak(toPublicState(fixtureState(), P3), foreignHiddenValues(P3));
+  });
+
+  it("keeps one player's hidden numbers out of the other player's view", () => {
+    const asP1 = JSON.stringify(toPublicState(fixtureState(), P1));
+    const asP2 = JSON.stringify(toPublicState(fixtureState(), P2));
+    const asP3 = JSON.stringify(toPublicState(fixtureState(), P3));
+
+    // Player 2 sees neither Player 1's nor Player 3's hidden numbers.
+    for (const value of HIDDEN_VALUES_BY_PLAYER[P1]) {
+      expect(asP2).not.toContain(`"number":${value}`);
+      expect(asP3).not.toContain(`"number":${value}`);
+    }
+    // Player 1 sees neither Player 2's nor Player 3's hidden numbers.
+    for (const value of HIDDEN_VALUES_BY_PLAYER[P2]) {
+      expect(asP1).not.toContain(`"number":${value}`);
+      expect(asP3).not.toContain(`"number":${value}`);
+    }
+    // The hidden public card stays hidden for everybody.
+    for (const view of [asP1, asP2, asP3]) {
+      expect(view).not.toContain(`"number":11`);
+    }
   });
 
   it("hides empty public slots without leaking the removed value and keeps positions", () => {
@@ -148,14 +210,14 @@ describe("toPublicState", () => {
   it("serializes collected cards as visible even after a conceal pass", () => {
     const concealed = structuredClone(fixtureState());
     concealAllCards(concealed);
-    const publicState = toPublicState(concealed, P1);
-    const me = publicState.players.find((p) => p.id === P1)!;
-    expect(me.collection).toEqual([
+    const publicState = toPublicState(concealed, P3);
+    const player1 = publicState.players.find((p) => p.id === P1)!;
+    expect(player1.collection).toEqual([
       { id: "3-a", isRevealed: true, number: 3 },
       { id: "3-b", isRevealed: true, number: 3 },
       { id: "3-c", isRevealed: true, number: 3 },
     ]);
-    // Concealed cards in all hands remain hidden after the conceal pass.
+    // Concealed cards in every hand remain hidden for a third-party viewer.
     for (const player of publicState.players) {
       for (const handCard of player.hand) {
         expect(handCard.isRevealed).toBe(false);
@@ -183,7 +245,7 @@ describe("toPublicState", () => {
     expect(publicState).not.toHaveProperty("token");
     expect(publicState).not.toHaveProperty("sessionDigest");
     expectNoSessionMaterial(publicState);
-    expectNoHiddenValueLeak(publicState);
+    expectNoHiddenValueLeak(publicState, foreignHiddenValues(P2));
   });
 
   it("passes through stage, substage, timestamp, players and messages", () => {
@@ -207,11 +269,17 @@ describe("toPublicState", () => {
     const publicState = toPublicState(settled, P2);
     expect(publicState.gameSubStage).toBe("sub:playing");
     // After settlement everything was concealed, including the 9 and 8.
-    expectNoHiddenValueLeak(publicState, [...HIDDEN_VALUES, 9, 8]);
+    expectNoHiddenValueLeak(publicState, [...foreignHiddenValues(P2), 9, 8]);
     expectNoSessionMaterial(publicState);
+    // Only the viewer's own hand keeps its numbers.
     for (const player of publicState.players) {
+      const isViewer = player.id === P2;
       for (const handCard of player.hand) {
-        expect(handCard).not.toHaveProperty("number");
+        if (isViewer) {
+          expect(Number.isFinite(cardNumber(handCard))).toBe(true);
+        } else {
+          expect(handCard).not.toHaveProperty("number");
+        }
       }
     }
     // Collections stay visible through the conceal pass.
@@ -236,7 +304,7 @@ describe("toPublicState", () => {
     expect(player2.hand).toContainEqual({ id: "2-b", isRevealed: true, number: 2 });
     expect(player2.hand.find((c) => c.id === "12-c")).toEqual({ id: "12-c", isRevealed: false });
     // Every other hidden number stays hidden.
-    expectNoHiddenValueLeak(publicState, [5, 7, 11, 12]);
+    expectNoHiddenValueLeak(publicState, foreignHiddenValues(P3).filter((v) => v !== 2));
     expectNoSessionMaterial(publicState);
   });
 
@@ -263,5 +331,29 @@ describe("toPublicState", () => {
       }
     }
     expectNoSessionMaterial(publicState);
+  });
+
+  it("shows engine-dealt cards to their owner only", () => {
+    let state = createGameState("roomabc123", P1, "Host", NOW);
+    state = applyGameAction(state, { type: "join", name: "Two" }, P2, NOW);
+    state = applyGameAction(state, { type: "join", name: "Three" }, P3, NOW);
+    state = applyGameAction(state, { type: "start" }, P1, NOW);
+
+    const asOwner = toPublicState(state, P2);
+    const owner = asOwner.players.find((p) => p.id === P2)!;
+    expect(owner.hand).toHaveLength(8);
+    for (const handCard of owner.hand) {
+      expect(handCard.isRevealed).toBe(true);
+      expect(Number.isFinite(cardNumber(handCard))).toBe(true);
+    }
+
+    // A third-party viewer sees the very same cards concealed.
+    const asSpectator = toPublicState(state, P3);
+    const sameHand = asSpectator.players.find((p) => p.id === P2)!;
+    expect(sameHand.hand.map((c) => c.id)).toEqual(owner.hand.map((c) => c.id));
+    for (const handCard of sameHand.hand) {
+      expect(handCard.isRevealed).toBe(false);
+      expect(handCard).not.toHaveProperty("number");
+    }
   });
 });

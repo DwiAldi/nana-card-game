@@ -32,6 +32,31 @@ const expectUnchanged = (before: ServerState, after: ServerState): void => {
   expect(snapshot(after)).toBe(snapshot(before));
 };
 
+/** What `expect(...).toThrow(...)` accepts as an expected error. */
+type ThrownMatcher = string | RegExp | Error | (new (...args: never[]) => Error);
+
+/**
+ * Asserts that `fn` throws and that the input state survives untouched.
+ *
+ * The snapshot is taken *before* `fn` runs and compared with a fresh
+ * snapshot afterwards. Snapshotting only after the action would compare a
+ * state with itself and could never fail, so the ordering here is what
+ * makes the assertion meaningful.
+ */
+const expectInputUnchanged = (
+  state: ServerState,
+  fn: () => unknown,
+  matcher?: ThrownMatcher,
+): void => {
+  const before = snapshot(state);
+  if (matcher === undefined) {
+    expect(fn).toThrow();
+  } else {
+    expect(fn).toThrow(matcher);
+  }
+  expect(snapshot(state)).toBe(before);
+};
+
 /**
  * Deterministic engine dependencies: sequential opaque ids and an identity
  * shuffle, so deals are reproducible (rule order: 1,1,1,2,2,2,...).
@@ -241,8 +266,11 @@ describe("start", () => {
 
   it("rejects a start by a non-host member", () => {
     const state = lobbyState([P1, P2]);
-    expect(() => applyGameAction(state, { type: "start" }, P2, NOW)).toThrow(ForbiddenError);
-    expectUnchanged(state, structuredClone(state));
+    expectInputUnchanged(
+      state,
+      () => applyGameAction(state, { type: "start" }, P2, NOW),
+      ForbiddenError,
+    );
   });
 
   it("rejects a start with fewer than two players", () => {
@@ -266,16 +294,18 @@ describe("start", () => {
 describe("authorization", () => {
   it("rejects every mutation by a non-member without changing state", () => {
     const lobby = lobbyState([P1, P2]);
-    const lobbyBefore = snapshot(lobby);
     for (const action of [
       { type: "start" } as const,
       { type: "chat", message: "hello" } as const,
       { type: "reveal-public", cardId: "p1" } as const,
       { type: "reveal-player", targetPlayerId: P2, minMax: "min" } as const,
     ]) {
-      expect(() => applyGameAction(lobby, action, STRANGER, NOW)).toThrow(/not in this game/);
+      expectInputUnchanged(
+        lobby,
+        () => applyGameAction(lobby, action, STRANGER, NOW),
+        /not in this game/,
+      );
     }
-    expect(snapshot(lobby)).toBe(lobbyBefore);
 
     const playing = inGameState({
       hands: { [P2]: [card("c1", 3)] },
@@ -287,9 +317,12 @@ describe("authorization", () => {
       { type: "chat", message: "hello" } as const,
       { type: "start" } as const,
     ]) {
-      expect(() => applyGameAction(playing, action, STRANGER, NOW)).toThrow(/not in this game/);
+      expectInputUnchanged(
+        playing,
+        () => applyGameAction(playing, action, STRANGER, NOW),
+        /not in this game/,
+      );
     }
-    expectUnchanged(playing, structuredClone(playing));
   });
 });
 
@@ -408,10 +441,11 @@ describe("reveal-public", () => {
 
   it("rejects an unknown public card without advancing the game", () => {
     const state = base();
-    expect(() =>
-      applyGameAction(state, { type: "reveal-public", cardId: "nope" }, P1, NOW),
-    ).toThrow(/Unknown card/);
-    expectUnchanged(state, structuredClone(state));
+    expectInputUnchanged(
+      state,
+      () => applyGameAction(state, { type: "reveal-public", cardId: "nope" }, P1, NOW),
+      /Unknown card/,
+    );
     expect(state.gameSubStage).toBe("sub:playing");
   });
 
@@ -420,18 +454,20 @@ describe("reveal-public", () => {
       hands: { [P1]: [card("h1", 5, true)] },
       publicCards: [card("p1", 4, true), card("p2", 6)],
     });
-    expect(() =>
-      applyGameAction(state, { type: "reveal-public", cardId: "p1" }, P1, NOW),
-    ).toThrow(ConflictError);
-    expectUnchanged(state, structuredClone(state));
+    expectInputUnchanged(
+      state,
+      () => applyGameAction(state, { type: "reveal-public", cardId: "p1" }, P1, NOW),
+      ConflictError,
+    );
   });
 
   it("rejects a reveal by a member who is not the current player", () => {
     const state = base();
-    expect(() =>
-      applyGameAction(state, { type: "reveal-public", cardId: "p1" }, P2, NOW),
-    ).toThrow(/Not your turn/);
-    expectUnchanged(state, structuredClone(state));
+    expectInputUnchanged(
+      state,
+      () => applyGameAction(state, { type: "reveal-public", cardId: "p1" }, P2, NOW),
+      /Not your turn/,
+    );
   });
 
   it("rejects reveals outside an active game", () => {
@@ -450,55 +486,62 @@ describe("reveal-public", () => {
       hands: { [P1]: [card("h1", 5, true)] },
       publicCards: [card("p1", 4, true)],
     });
-    expect(() =>
-      applyGameAction(state, { type: "reveal-public", cardId: "p1" }, P1, NOW),
-    ).toThrow(ConflictError);
-    expectUnchanged(state, structuredClone(state));
+    expectInputUnchanged(
+      state,
+      () => applyGameAction(state, { type: "reveal-public", cardId: "p1" }, P1, NOW),
+      ConflictError,
+    );
   });
 
   it("rejects a player reveal with an unknown target player", () => {
     const state = inGameState({
       hands: { [P2]: [card("h1", 5)] },
     });
-    expect(() =>
-      applyGameAction(
-        state,
-        { type: "reveal-player", targetPlayerId: STRANGER, minMax: "min" },
-        P1,
-        NOW,
-      ),
-    ).toThrow(/Unknown target player/);
-    expectUnchanged(state, structuredClone(state));
+    expectInputUnchanged(
+      state,
+      () =>
+        applyGameAction(
+          state,
+          { type: "reveal-player", targetPlayerId: STRANGER, minMax: "min" },
+          P1,
+          NOW,
+        ),
+      /Unknown target player/,
+    );
   });
 
   it("rejects a player reveal when the target has no unrevealed cards", () => {
     const state = inGameState({
       hands: { [P2]: [card("h1", 5, true)] },
     });
-    expect(() =>
-      applyGameAction(
-        state,
-        { type: "reveal-player", targetPlayerId: P2, minMax: "min" },
-        P1,
-        NOW,
-      ),
-    ).toThrow(/No more cards/);
-    expectUnchanged(state, structuredClone(state));
+    expectInputUnchanged(
+      state,
+      () =>
+        applyGameAction(
+          state,
+          { type: "reveal-player", targetPlayerId: P2, minMax: "min" },
+          P1,
+          NOW,
+        ),
+      /No more cards/,
+    );
   });
 
   it("rejects a player reveal when the target hand is empty", () => {
     const state = inGameState({
       hands: { [P2]: [] },
     });
-    expect(() =>
-      applyGameAction(
-        state,
-        { type: "reveal-player", targetPlayerId: P2, minMax: "min" },
-        P1,
-        NOW,
-      ),
-    ).toThrow(/No more cards/);
-    expectUnchanged(state, structuredClone(state));
+    expectInputUnchanged(
+      state,
+      () =>
+        applyGameAction(
+          state,
+          { type: "reveal-player", targetPlayerId: P2, minMax: "min" },
+          P1,
+          NOW,
+        ),
+      /No more cards/,
+    );
   });
 
   it("does not mutate the input state", () => {
@@ -587,15 +630,42 @@ describe("settlement", () => {
 
   it("rejects a settlement poll by a non-member", () => {
     const state = successState();
-    expect(() => settleIfOverdue(state, STRANGER, NOW + SETTLE_DELAY_MS + 1)).toThrow(
+    expectInputUnchanged(
+      state,
+      () => settleIfOverdue(state, STRANGER, NOW + SETTLE_DELAY_MS + 1),
       /not in this game/,
     );
-    expectUnchanged(state, structuredClone(state));
   });
 
   it("leaves a non-settling state untouched", () => {
     const state = inGameState();
     expectUnchanged(state, settleIfOverdue(state, P2, NOW + SETTLE_DELAY_MS + 1));
+  });
+
+  it("wraps the turn around to the first seat after the last player", () => {
+    // The current player sits in the last seat, so the next player is the
+    // first one again.
+    const state = settlingState({ current: P3 });
+    expect(state.players.map((p) => p.isPlaying)).toEqual([false, false, true]);
+
+    const next = settleIfOverdue(state, P2, NOW + SETTLE_DELAY_MS + 1);
+    expect(next.players.map((p) => p.isPlaying)).toEqual([true, false, false]);
+    expect(next.players[0].id).toBe(P1);
+    expect(next.gameSubStage).toBe("sub:playing");
+    expect(next.gameStage).toBe("stage:in-game");
+  });
+
+  it("does not settle a game that is already over", () => {
+    const state: ServerState = {
+      ...inGameState(),
+      gameStage: "stage:game-over",
+      gameSubStage: null,
+    };
+    const next = settleIfOverdue(state, P2, NOW + SETTLE_DELAY_MS + 1);
+    expectUnchanged(state, next);
+    expect(next.gameStage).toBe("stage:game-over");
+    expect(next.gameSubStage).toBeNull();
+    expect(next.players.map((p) => p.isWinner)).toEqual([false, false, false]);
   });
 
   it("does not collect cards on a failed challenge but still passes the turn", () => {

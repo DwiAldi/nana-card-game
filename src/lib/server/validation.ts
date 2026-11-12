@@ -1,3 +1,4 @@
+import type { MinMax } from "@/lib/game-helper";
 import { BadRequestError } from "./errors";
 
 /**
@@ -14,7 +15,11 @@ export const MAX_PLAYER_NAME_LENGTH = 40;
 export const MAX_CHAT_MESSAGE_LENGTH = 500;
 export const MAX_BODY_BYTES = 8192;
 
-export type MinMax = "min" | "max";
+/**
+ * The min/max reveal choice. Re-exported from the shared game helper so the
+ * client and the server agree on one definition of the literal union.
+ */
+export type { MinMax };
 
 export type ActionRequest =
   | { action: "host"; name: string }
@@ -31,8 +36,14 @@ export type ActionRequest =
 
 /** Room ids: bounded ASCII, currently base36 timestamps joined client-side. */
 const ROOM_ID_PATTERN = /^[a-z0-9]{4,32}$/;
-/** Card ids follow the shipped deck, e.g. "1-a" .. "12-c". */
-const CARD_ID_PATTERN = /^(1[0-2]|[1-9])-[a-z]$/;
+/**
+ * Card ids are 96-bit opaque values minted by the server
+ * (`randomBytes(12).toString("hex")`): 24 lowercase hex characters that
+ * encode nothing about the card's value. The legacy value-bearing ids
+ * ("1-a" .. "12-c") are rejected: they would let a client guess a hidden
+ * card's number from its id.
+ */
+const CARD_ID_PATTERN = /^[0-9a-f]{24}$/;
 /** Player ids are 128-bit hex values minted by the server. */
 const PLAYER_ID_PATTERN = /^[a-f0-9]{32}$/;
 

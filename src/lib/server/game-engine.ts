@@ -10,10 +10,10 @@ import {
   concealAllCards,
   removeTargetCards,
   sortByNumberAsc,
+  type MinMax,
 } from "@/lib/game-helper";
 import { GAME_RULES } from "@/lib/rules";
 import { ApiError, BadRequestError, ForbiddenError } from "./errors";
-import type { MinMax } from "./validation";
 
 /**
  * Authorized game transitions.
@@ -157,19 +157,20 @@ export function applyGameAction(
   now: number,
   deps: GameEngineDeps = defaultGameEngineDeps,
 ): ServerState {
-  const next = structuredClone(state);
-
   if (action.type === "join") {
-    if (next.gameStage !== "stage:lobby") {
+    if (state.gameStage !== "stage:lobby") {
       throw new ConflictError("This game has already started");
     }
-    if (next.players.some((player) => player.id === playerId)) {
-      // Already a member: joining again is a no-op.
-      return next;
+    if (state.players.some((player) => player.id === playerId)) {
+      // Already a member: joining again is a no-op. Deliberate hardening
+      // divergence from the legacy route, which rejected a full room before
+      // this membership check, locking a member out of their own room.
+      return structuredClone(state);
     }
-    if (next.players.length >= MAX_PLAYERS) {
+    if (state.players.length >= MAX_PLAYERS) {
       throw new ConflictError("The room is full");
     }
+    const next = structuredClone(state);
     next.players.push({
       id: playerId,
       name: action.name,
@@ -183,7 +184,11 @@ export function applyGameAction(
     return next;
   }
 
-  const member = requireMember(next, playerId);
+  // Cheap gates (membership) run against the input before the deep copy, so
+  // rejected actions never pay for a clone.
+  const member = requireMember(state, playerId);
+
+  const next = structuredClone(state);
 
   switch (action.type) {
     case "start": {
@@ -191,6 +196,9 @@ export function applyGameAction(
         throw new ForbiddenError("Only the host can start the game");
       }
       if (next.gameStage !== "stage:lobby") {
+        // Deliberate hardening divergence from the legacy route, which only
+        // rejected an in-game start and so allowed a restart from game-over;
+        // only a lobby may start here.
         throw new ConflictError("The game has already started");
       }
       const playerCount = next.players.length;
@@ -228,6 +236,8 @@ export function applyGameAction(
         throw new BadRequestError("Unknown card");
       }
       if (cardToReveal.isRevealed) {
+        // Deliberate hardening divergence from the legacy route, which
+        // silently allowed re-revealing an already-revealed public card.
         throw new ConflictError("Card already revealed");
       }
       cardToReveal.isRevealed = true;
@@ -271,8 +281,10 @@ export function applyGameAction(
 }
 
 /**
- * Settles an overdue round. Any authenticated member's poll may call this,
- * so a disconnected current player cannot stall the room.
+ * Settles an overdue round. Any authenticated member's poll may call this —
+ * a deliberate hardening divergence from the legacy flow, where only the
+ * current player's client could drive settlement — so a disconnected
+ * current player cannot stall the room.
  *
  * Returns a new state. Settlement happens at most once: while the state is
  * not settling, or before the two-second reveal delay elapses, the state is
@@ -283,8 +295,11 @@ export function settleIfOverdue(
   playerId: string,
   now: number,
 ): ServerState {
+  // Cheap gate (membership) runs against the input before the deep copy, so
+  // a rejected poll never pays for a clone.
+  requireMember(state, playerId);
+
   const next = structuredClone(state);
-  requireMember(next, playerId);
 
   if (next.gameStage !== "stage:in-game" || next.gameSubStage !== "sub:settling") {
     return next;
