@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI_REDIS_PASSWORD: ci-only-test-password
+      TEST_REDIS_URL: redis://:ci-only-test-password@127.0.0.1:16379/0
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start authenticated Redis
+        run: |
+          docker run --detach --rm \
+            --name nana-ci-redis \
+            --publish 127.0.0.1:16379:6379 \
+            redis:8.10.3-alpine \
+            redis-server --requirepass "$CI_REDIS_PASSWORD"
+          for attempt in {1..30}; do
+            if docker exec nana-ci-redis redis-cli --no-auth-warning \
+              -a "$CI_REDIS_PASSWORD" ping | grep --quiet PONG; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Test with Redis
+        run: npm run test:run
+
+      - name: Stop test Redis
+        if: ${{ always() }}
+        run: docker rm --force nana-ci-redis 2>/dev/null || true
+
+      - name: Build application
+        run: npm run build
+
+      - name: Build production container
+        run: docker build --tag nana-card-game:ci .
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Audit full dependency tree
+        if: ${{ always() }}
+        run: npm audit --audit-level=high
