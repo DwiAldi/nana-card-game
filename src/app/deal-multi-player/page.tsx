@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Button,
@@ -8,11 +8,10 @@ import {
   HStack,
   VStack,
   Text,
-  ButtonGroup,
-  useToast,
 } from "@chakra-ui/react";
 import NanaCard from "@/components/NanaCard";
 import { shuffle } from "@/lib/random";
+import { toaster } from "@/components/ui/toaster";
 
 // const ALL_CARDS = Array.from({ length: 9 }, (_, index) => index + 1);
 const ALL_GAME_CARDS = [
@@ -28,12 +27,22 @@ const ALL_GAME_CARDS = [
 ];
 
 export default function App() {
-  const toast = useToast();
   const [cardDeck, setCardDeck] = useState(ALL_GAME_CARDS);
-  const [myCards, setMyCards] = useState([]);
-  const [botCards, setBotCards] = useState([]);
-  const [publicCards, setPublicCards] = useState([]);
-  const [revealedCardNumbers, setRevealedCardNumbers] = useState([]);
+  const [myCards, setMyCards] = useState<string[]>([]);
+  const [botCards, setBotCards] = useState<string[]>([]);
+  const [publicCards, setPublicCards] = useState<string[]>([]);
+  const [revealedCardNumbers, setRevealedCardNumbers] = useState<string[]>([]);
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (resetTimer.current !== null) {
+        clearTimeout(resetTimer.current);
+        resetTimer.current = null;
+      }
+    },
+    [],
+  );
 
   const shuffleCards = () => {
     setCardDeck((prev) => shuffle(prev));
@@ -42,7 +51,7 @@ export default function App() {
 
   const dealRandomCard = (target: string) => {
     if (cardDeck.length === 0) return;
-    let optCards = [...cardDeck];
+    const optCards = [...cardDeck];
     const randomIndex = Math.floor(Math.random() * optCards.length);
     const [removedCard] = optCards.splice(randomIndex, 1);
     setCardDeck(optCards);
@@ -70,34 +79,33 @@ export default function App() {
     } else if (revealedCardNumbers.includes(cardNumber)) {
       setRevealedCardNumbers((prev) => [...prev, cardNumber]);
     } else {
-      setTimeout(() => {
+      if (resetTimer.current !== null) clearTimeout(resetTimer.current);
+      resetTimer.current = setTimeout(() => {
+        resetTimer.current = null;
         resetAll();
-        toast({
-          title: "挑战失败",
-          description: "试着连续翻出三张一样的数字",
-          status: "error",
+        toaster.create({
+          title: "Challenge failed",
+          description: "Try to reveal three matching numbers in a row",
+          type: "error",
           duration: 9000,
-          isClosable: true,
+          closable: true,
         });
       }, 1000);
     }
   };
 
-  const onFlipToBack = (cardId: number) => {
-    // setRevealedCardNumbers((prev) => prev.filter((n) => n != cardId));
-  };
-
   return (
     <VStack w="100vw" h="100vh" bgColor="gray.100">
       <VStack w="600px" bgColor="#333" borderRadius="24px">
-        <Text color="white">电脑</Text>
+        <Text color="white">Computer</Text>
         <HStack h="136px" padding="8px" flexWrap="wrap">
-          {botCards.map((cardId, index) => (
+          {botCards.map((cardId) => (
             <NanaCard
-              onFlipToFront={onFlipToFront}
-              onFlipToBack={onFlipToBack}
+              onClick={onFlipToFront}
               key={cardId}
               cardId={cardId}
+              number={Number(cardId.split("-")[0])}
+              isRevealed={revealedCardNumbers.includes(cardId.split("-")[0])}
               w="90px"
               h="120px"
             />
@@ -126,10 +134,11 @@ export default function App() {
                 style={{ position: "absolute" }}
               >
                 <NanaCard
-                  onFlipToFront={onFlipToFront}
-                  onFlipToBack={onFlipToBack}
+                  onClick={onFlipToFront}
                   key={cardId}
                   cardId={cardId}
+                  number={Number(cardId.split("-")[0])}
+                  isRevealed={revealedCardNumbers.includes(cardId.split("-")[0])}
                   w="90px"
                   h="120px"
                 />
@@ -138,14 +147,15 @@ export default function App() {
           </AnimatePresence>
         </Center>
         <VStack w="600px" h="320px" bgColor="#fff" borderRadius="24px">
-          <p>公共区</p>
+          <p>Public area</p>
           <HStack padding="8px" flexWrap="wrap">
-            {publicCards.map((cardId, index) => (
+            {publicCards.map((cardId) => (
               <NanaCard
-                onFlipToFront={onFlipToFront}
-                onFlipToBack={onFlipToBack}
+                onClick={onFlipToFront}
                 key={cardId}
                 cardId={cardId}
+                number={Number(cardId.split("-")[0])}
+                isRevealed={revealedCardNumbers.includes(cardId.split("-")[0])}
                 w="90px"
                 h="120px"
               />
@@ -154,43 +164,44 @@ export default function App() {
         </VStack>
 
         <VStack>
-          <Button colorScheme="cyan" onClick={() => shuffleCards()}>
-            洗牌
+          <Button colorPalette="cyan" onClick={() => shuffleCards()}>
+            Shuffle
           </Button>
-          <Button colorScheme="cyan" onClick={() => dealRandomCard("bot")}>
-            发牌给机器人
+          <Button colorPalette="cyan" onClick={() => dealRandomCard("bot")}>
+            Deal to bot
           </Button>
-          <Button colorScheme="cyan" onClick={() => dealRandomCard("public")}>
-            发牌到公共区
+          <Button colorPalette="cyan" onClick={() => dealRandomCard("public")}>
+            Deal to public area
           </Button>
-          <Button colorScheme="cyan" onClick={() => dealRandomCard("me")}>
-            发牌给我
+          <Button colorPalette="cyan" onClick={() => dealRandomCard("me")}>
+            Deal to me
           </Button>
-          <Button colorScheme="cyan" onClick={() => resetAll()}>
-            重置
+          <Button colorPalette="cyan" onClick={() => resetAll()}>
+            Reset
           </Button>
         </VStack>
       </HStack>
 
       <HStack>
-        <Button colorScheme="cyan">最小</Button>
+        <Button colorPalette="cyan">Lowest</Button>
         <VStack w="600px" bgColor="#333" borderRadius="24px">
-          <Text color="white">已揭示的卡牌：{revealedCardNumbers}</Text>
-          <Text color="white">我的卡牌</Text>
+          <Text color="white">Revealed cards: {revealedCardNumbers}</Text>
+          <Text color="white">My cards</Text>
           <HStack h="136px" padding="8px" flexWrap="wrap">
-            {myCards.map((cardId, index) => (
+            {myCards.map((cardId) => (
               <NanaCard
-                onFlipToFront={onFlipToFront}
-                onFlipToBack={onFlipToBack}
+                onClick={onFlipToFront}
                 key={cardId}
                 cardId={cardId}
+                number={Number(cardId.split("-")[0])}
+                isRevealed={revealedCardNumbers.includes(cardId.split("-")[0])}
                 w="90px"
                 h="120px"
               />
             ))}
           </HStack>
         </VStack>
-        <Button colorScheme="cyan">最大</Button>
+        <Button colorPalette="cyan">Highest</Button>
       </HStack>
     </VStack>
   );

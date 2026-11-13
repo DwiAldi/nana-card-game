@@ -1,14 +1,14 @@
 "use client";
 
-import type { ComponentType } from "react";
-import { motion, useSpring } from "framer-motion";
+import { motion, useSpring, type Transition } from "framer-motion";
 import React, { useState, useRef, useEffect } from "react";
 import { Box } from "@chakra-ui/react";
+import Image from "next/image";
 
 // Learn more: https://www.framer.com/docs/guides/overrides/
 
 //Spring animation parameters
-const spring = {
+const spring: Transition = {
   type: "spring",
   stiffness: 300,
   damping: 40,
@@ -22,18 +22,25 @@ const spring = {
  * @framerSupportedLayoutHeight fixed
  */
 
-const PokerCard = ({ variant, style }) => {
+const PokerCard = ({
+  variant,
+  style,
+}: {
+  variant: "Front" | "Back";
+  style: React.CSSProperties;
+}) => {
   return (
     <Box
       w={292}
       h={411}
       bgColor={variant === "Front" ? "orange" : "cyan"}
       style={style}
+      position="relative"
     >
       {variant === "Front" ? (
-        <img src="/img/poker-front.png" alt="front" />
+        <Image src="/img/poker-front.png" alt="front" fill sizes="292px" />
       ) : (
-        <img src="/img/poker-back.png" alt="front" />
+        <Image src="/img/poker-back.png" alt="back" fill sizes="292px" />
       )}
     </Box>
   );
@@ -48,10 +55,11 @@ const Page = () => {
 
   const [rotateXaxis, setRotateXaxis] = useState(0);
   const [rotateYaxis, setRotateYaxis] = useState(0);
-  const ref = useRef(null);
+  const ref = useRef<HTMLDivElement>(null);
 
-  const handleMouseMove = (event) => {
+  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
     const element = ref.current;
+    if (!element) return;
     const elementRect = element.getBoundingClientRect();
     const elementWidth = elementRect.width;
     const elementHeight = elementRect.height;
@@ -76,7 +84,7 @@ const Page = () => {
   useEffect(() => {
     dx.set(-rotateXaxis);
     dy.set(rotateYaxis);
-  }, [rotateXaxis, rotateYaxis]);
+  }, [dx, dy, rotateXaxis, rotateYaxis]);
 
   return (
     <motion.div

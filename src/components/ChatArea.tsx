@@ -3,16 +3,13 @@
 import React, { useState } from "react";
 import {
   InputGroup,
-  InputRightElement,
   Input,
-  Button,
   Box,
   Text,
   Icon,
 } from "@chakra-ui/react";
-import { ActionPrefix, Message } from "@/types";
-import { SystemStyleObject } from "@chakra-ui/styled-system";
-import { motion, useAnimate, useSpring } from "framer-motion";
+import { MultiplayerAction, Message } from "@/types";
+import { motion, useAnimate } from "framer-motion";
 import {
   RiSendPlaneFill,
   RiArrowDownSFill,
@@ -28,13 +25,13 @@ const toHHSS = (timestamp: number) => {
 };
 
 const ChatArea = ({
-  sx,
   messages,
   act,
+  disabled = false,
 }: {
-  sx?: SystemStyleObject;
   messages: Message[];
-  act: (action: ActionPrefix, data?: any) => void;
+  act: (action: MultiplayerAction, data?: unknown) => void;
+  disabled?: boolean;
 }) => {
   const [message, setMessage] = useState<string>("");
   const [isCollapsed, setIsCollapsed] = useState<boolean>(true);
@@ -47,7 +44,7 @@ const ChatArea = ({
 
   const sendMessage = () => {
     if (message && message !== "") {
-      act("action:chat", { message: message });
+      act("chat", { message: message });
       setMessage("");
     }
   };
@@ -59,7 +56,6 @@ const ChatArea = ({
         padding="4px"
         border="1px solid white"
         borderRadius="8px"
-        sx={{ ...sx }}
         position="relative"
         bgColor="gray.700"
         paddingBottom="24px"
@@ -90,24 +86,27 @@ const ChatArea = ({
             >{`[${toHHSS(m.timestamp)}] ${m.playerName}: ${m.content}`}</Text>
           ))}
         </Box>
-        <InputGroup size="sm">
+        <InputGroup
+          endElement={
+            <button onClick={sendMessage} aria-label="Send message" disabled={disabled}>
+              <Icon w="16px" h="16px" color="white" as={RiSendPlaneFill} />
+            </button>
+          }
+        >
           <Input
+            size="sm"
             value={message}
-            onChange={(e: any) => setMessage(e.target.value)}
+            onChange={(e) => setMessage(e.target.value)}
             color="white"
             placeholder="send message"
-            onKeyDown={(e: any) => {
+            onKeyDown={(e) => {
               if (e.key === "Enter") {
                 sendMessage();
               }
             }}
             enterKeyHint="send"
+            disabled={disabled}
           />
-          <InputRightElement>
-            <button onClick={sendMessage}>
-              <Icon w="16px" h="16px" color="white" as={RiSendPlaneFill} />
-            </button>
-          </InputRightElement>
         </InputGroup>
       </Box>
     </motion.div>

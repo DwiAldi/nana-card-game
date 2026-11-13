@@ -2,21 +2,21 @@
 
 import React, { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Heading, Text } from "@chakra-ui/react";
+import { Text } from "@chakra-ui/react";
 
-const BigToast = ({ message }: { message: string | undefined }) => {
+const TimedToast = ({ message }: { message: string }) => {
   const [isShowing, setIsShowing] = useState(true);
 
   useEffect(() => {
-    setIsShowing(true);
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       setIsShowing(false);
     }, 3000);
-  }, [message]);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <AnimatePresence>
-      {message && isShowing && (
+      {isShowing && (
         <motion.div
           style={{
             position: "fixed",
@@ -46,5 +46,8 @@ const BigToast = ({ message }: { message: string | undefined }) => {
     </AnimatePresence>
   );
 };
+
+const BigToast = ({ message }: { message: string | null | undefined }) =>
+  message ? <TimedToast key={message} message={message} /> : null;
 
 export default BigToast;

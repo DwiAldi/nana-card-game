@@ -4,71 +4,74 @@ import React from "react";
 import { BsQuestionCircle } from "react-icons/bs";
 import {
   IconButton,
-  Modal,
-  Button,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalCloseButton,
-  ModalBody,
+  CloseButton,
+  Dialog,
+  Portal,
   Text,
-  ModalFooter,
   VStack,
   useDisclosure,
 } from "@chakra-ui/react";
 
 const GameRuleButton = () => {
-  const { isOpen, onOpen, onClose } = useDisclosure();
+  const { open, onOpen, onClose } = useDisclosure();
 
   return (
     <>
       <IconButton
         variant="outline"
         color="white"
-        colorScheme="none"
+        colorPalette="gray"
         aria-label="Mute"
         size="sm"
         fontSize="20px"
         onClick={() => onOpen()}
-        icon={<BsQuestionCircle />}
-      />
+      >
+        <BsQuestionCircle />
+      </IconButton>
 
-      <Modal isOpen={isOpen} onClose={onClose}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>游戏规则</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
+      <Dialog.Root open={open} onOpenChange={(event) => !event.open && onClose()}>
+        <Portal>
+          <Dialog.Backdrop />
+          <Dialog.Positioner>
+            <Dialog.Content>
+              <Dialog.Header>
+                <Dialog.Title>Game rules</Dialog.Title>
+              </Dialog.Header>
+              <Dialog.CloseTrigger asChild>
+                <CloseButton size="sm" />
+              </Dialog.CloseTrigger>
+              <Dialog.Body>
             <VStack alignItems="start">
-              <Text>游戏的目标是收集3张相同数字的卡牌</Text>
-              <Text>一共有36张卡牌，数字从1-12，每个数字3张牌</Text>
-              <Text>挑战开始：</Text>
+              <Text>Collect sets of three cards with the same number.</Text>
+              <Text>The deck has 36 cards: three copies of each number from 1 to 12.</Text>
+              <Text>Starting a challenge:</Text>
               <Text>
-                每个玩家回合中，你可以从玩家手牌中揭示最大/最小的卡牌，也可以从公共区任选一张牌
+                On your turn, reveal any player&apos;s lowest or highest card, or any card in the public area.
               </Text>
-              <Text>挑战的两种结果：</Text>
+              <Text>A challenge has two possible outcomes:</Text>
               <Text>
-                1. 一旦出现不同数字的卡牌，则挑战失败，轮到下位玩家操作
+                1. If you reveal a different number, the challenge fails and play passes to the next player.
               </Text>
               <Text>
-                2. 如果连续找出3张数字相同的卡牌，则挑战成功，轮到下位玩家操作
+                2. If you reveal three matching numbers in a row, the challenge succeeds and play passes to the next player.
               </Text>
-              <Text>游戏结束条件：</Text>
-              <Text>1. 当任意一位玩家收集了3套卡牌，该玩家获胜</Text>
+              <Text>You win when you meet any of these conditions:</Text>
+              <Text>1. Collect three sets.</Text>
               <Text>
                 2.
-                当任意一位玩家收集的2套卡牌中的数字相加/相减等于7时（如2+5=7，11-4=7），该玩家获胜
+                Collect two sets whose numbers add up to 7 or differ by 7 (for example, 2 + 5 = 7 or 11 - 4 = 7).
               </Text>
-              <Text>3. 当任意一位玩家收集了三张数字7，该玩家立刻获胜</Text>
+              <Text>3. Collect all three 7s to win immediately.</Text>
               <Text>
-                注：2人游戏中没有数字11和12，3人游戏中没有数字12，4-6人为全部36张牌
+                Note: With two players, remove 11s and 12s. With three players, remove 12s. With four to six players, use all 36 cards.
               </Text>
             </VStack>
-          </ModalBody>
-
-          <ModalFooter>{/*<Button variant="ghost">OK</Button>*/}</ModalFooter>
-        </ModalContent>
-      </Modal>
+              </Dialog.Body>
+              <Dialog.Footer />
+            </Dialog.Content>
+          </Dialog.Positioner>
+        </Portal>
+      </Dialog.Root>
     </>
   );
 };

@@ -1,38 +1,33 @@
-import { useToast as useChakraToast } from "@chakra-ui/toast";
+import { toaster } from "@/components/ui/toaster";
 
 export const useGameToast = () => {
-  const toast = useChakraToast();
-
   const toastError = (title: string, message: string) => {
-    toast({
+    toaster.create({
       title: title,
       duration: 6000,
       description: message,
-      status: "error",
-      isClosable: true,
-      position: "top",
+      type: "error",
+      closable: true,
     });
   };
 
   const toastInfo = (title: string, message?: string) => {
-    toast({
+    toaster.create({
       title: title,
       duration: 3000,
       description: message,
-      status: "info",
-      isClosable: true,
-      position: "top",
+      type: "info",
+      closable: true,
     });
   };
 
   const toastOk = (title: string, message?: string) => {
-    toast({
+    toaster.create({
       title: title,
       duration: 3000,
       description: message,
-      status: "success",
-      isClosable: true,
-      position: "bottom",
+      type: "success",
+      closable: true,
     });
   };
 

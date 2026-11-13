@@ -3,120 +3,91 @@
 import {
   Button,
   Card,
-  CardBody,
-  CardFooter,
   Center,
-  Divider,
   Heading,
   IconButton,
   Input,
   InputGroup,
-  InputLeftAddon,
+  Separator,
   Text,
-  useToast,
   VStack,
 } from "@chakra-ui/react";
-import React, { useLayoutEffect, useState } from "react";
-import { randomString } from "@/lib/random";
+import React from "react";
 import { BsGithub } from "react-icons/bs";
 import { useRouter, useSearchParams } from "next/navigation";
 import GameRuleButton from "@/components/GameRuleButton";
-import LanguageButton from "@/components/LanguageButton";
 import { useTranslation } from "@/i18n/index";
 import { useGameSettingsStore } from "@/store/setting-store";
 import { BsRobot } from "react-icons/bs";
+import { toaster } from "@/components/ui/toaster";
+import { useJoinRoomId } from "@/lib/use-join-room-id";
+import { gameApi, GameApiError } from "@/lib/client-api";
 
 const GamePage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const joinParam = searchParams.get("join");
 
-  const toast = useToast();
   const { t } = useTranslation();
 
-  let { playerId, setPlayerId, playerName, setPlayerName } =
-    useGameSettingsStore();
+  const { playerName, setPlayerName } = useGameSettingsStore();
+  const [pending, setPending] = React.useState(false);
 
-  const [joinRoomId, setJoinRoomId] = useState("");
-
-  useLayoutEffect(() => {
-    if (joinParam) setJoinRoomId(joinParam);
-  }, [joinParam]);
+  const { joinRoomId, setJoinRoomId } = useJoinRoomId(joinParam);
 
   const hostRoom = async () => {
     if (!playerName) {
-      toast({
-        title: `请输入玩家名称`,
-        status: "error",
+      toaster.create({
+        title: `Enter your name`,
+        type: "error",
         duration: 2000,
-        isClosable: true,
-        position: "top",
+        closable: true,
       });
       return;
     }
-    let newGameId = Date.now().toString(36);
-    const res = await fetch("/api/action", {
-      method: "POST",
-      body: JSON.stringify({
-        gameId: newGameId,
-        playerId: playerId,
-        action: "action:host",
-        data: {
-          playerId: playerId,
-          playerName: playerName,
-        },
-      }),
-    });
-    if (res.ok) {
-      router.push(`/${newGameId}`);
-    } else {
-      toast({
-        title: `服务器错误`,
-        description:
-          "Vercel KV max daily request limit exceeded. Limit: 10000, Usage: 10000.",
-        status: "error",
+    if (pending) return;
+    setPending(true);
+    try {
+      const state = await gameApi.host(playerName);
+      router.push(`/${state.gameId}`);
+    } catch (error) {
+      toaster.create({
+        title: "Unable to create game",
+        description: error instanceof Error ? error.message : "The request failed",
+        type: "error",
         duration: 2000,
-        isClosable: true,
-        position: "top",
+        closable: true,
       });
+    } finally {
+      setPending(false);
     }
   };
 
   const joinRoom = async () => {
     if (!playerName) {
-      toast({
-        title: `请输入玩家名称`,
-        status: "error",
+      toaster.create({
+        title: `Enter your name`,
+        type: "error",
         duration: 2000,
-        isClosable: true,
-        position: "top",
+        closable: true,
       });
       return;
     }
-    const res = await fetch("/api/action", {
-      method: "POST",
-      body: JSON.stringify({
-        action: "action:join",
-        gameId: joinRoomId,
-        playerId: playerId,
-        data: {
-          playerId: playerId,
-          playerName: playerName,
-        },
-      }),
-    });
-    if (res.ok) {
-      router.push(`/${joinRoomId}`);
-    } else {
-      toast({
-        title: `服务器错误`,
-        description:
-          "Vercel KV max daily request limit exceeded. Limit: 10000, Usage: 10000.",
-        status: "error",
+    if (pending) return;
+    setPending(true);
+    try {
+      const state = await gameApi.join(joinRoomId, playerName);
+      router.push(`/${state.gameId}`);
+    } catch (error) {
+      toaster.create({
+        title: "Unable to join game",
+        description: error instanceof GameApiError ? error.message : "The request failed",
+        type: "error",
         duration: 2000,
-        isClosable: true,
-        position: "top",
+        closable: true,
       });
+    } finally {
+      setPending(false);
     }
   };
 
@@ -125,7 +96,10 @@ const GamePage = () => {
       <VStack gap="12px">
         <VStack>
           <Text
-            bgGradient="linear(to-r, gray.300, yellow.400, pink.200)"
+            bgGradient="to-r"
+            gradientFrom="gray.300"
+            gradientVia="yellow.400"
+            gradientTo="pink.200"
             bgClip="text"
             fontSize="6xl"
             fontWeight="extrabold"
@@ -134,35 +108,39 @@ const GamePage = () => {
             <IconButton
               variant="outline"
               color="white"
-              colorScheme="none"
+              colorPalette="gray"
               aria-label="Mute"
               size="sm"
               fontSize="20px"
               onClick={() =>
-                window.open("https://github.com/Cyronlee/nana-card-game")
+                window.open("https://github.com/DwiAldi/nana-card-game")
               }
-              icon={<BsGithub />}
-            />
+            >
+              <BsGithub />
+            </IconButton>
           </Text>
           <Text
-            bgGradient="linear(to-r, gray.300, yellow.400, pink.200)"
+            bgGradient="to-r"
+            gradientFrom="gray.300"
+            gradientVia="yellow.400"
+            gradientTo="pink.200"
             bgClip="text"
             fontSize="lg"
             fontWeight="extrabold"
           >
-            {t("NANA_GAME_DESCRIPTION")} <GameRuleButton /> <LanguageButton />
+            {t("NANA_GAME_DESCRIPTION")} <GameRuleButton />
           </Text>
         </VStack>
         {!joinParam && (
           <>
-            <Card
+            <Card.Root
               w="sm"
               bg="green.50"
               borderColor="green.200"
               borderWidth="1px"
             >
-              <CardBody>
-                <VStack spacing="16px" alignItems="start">
+              <Card.Body>
+                <VStack gap="16px" alignItems="start">
                   <Heading size="md" color="green.700">
                     <BsRobot
                       style={{ display: "inline", marginRight: "8px" }}
@@ -173,28 +151,27 @@ const GamePage = () => {
                     {t("SINGLE_PLAYER_DESCRIPTION")}
                   </Text>
                 </VStack>
-              </CardBody>
-              <Divider sx={{ borderColor: "green.200" }} />
-              <CardFooter justifyContent="flex-end">
+              </Card.Body>
+              <Separator borderColor="green.200" />
+              <Card.Footer justifyContent="flex-end">
                 <Button
                   size="sm"
                   variant="solid"
-                  colorScheme="green"
+                  colorPalette="green"
                   onClick={() => router.push("/local")}
                 >
                   {t("START_SINGLE_PLAYER")}
                 </Button>
-              </CardFooter>
-            </Card>
-            <Card w="sm">
-              <CardBody>
-                <VStack spacing="24px" alignItems="start">
+              </Card.Footer>
+            </Card.Root>
+            <Card.Root w="sm">
+              <Card.Body>
+                <VStack gap="24px" alignItems="start">
                   <Heading size="md">{t("CREATE_GAME")}</Heading>
                   {/*<Heading size="md">*/}
                   {/*  {playerInfo.id} {playerInfo.name}*/}
                   {/*</Heading>*/}
-                  <InputGroup>
-                    <InputLeftAddon>{t("YOUR_NAME")}</InputLeftAddon>
+                  <InputGroup startAddon={t("YOUR_NAME")}>
                     <Input
                       value={playerName}
                       onChange={(e) => setPlayerName(e.target.value)}
@@ -202,35 +179,34 @@ const GamePage = () => {
                     />
                   </InputGroup>
                 </VStack>
-              </CardBody>
-              <Divider sx={{ borderColor: "gray.300" }} />
-              <CardFooter justifyContent="flex-end">
+              </Card.Body>
+              <Separator borderColor="gray.300" />
+              <Card.Footer justifyContent="flex-end">
                 <Button
                   size="sm"
                   variant="solid"
-                  colorScheme="blue"
+                  colorPalette="blue"
                   onClick={() => hostRoom()}
+                  disabled={pending}
                 >
                   {t("CREATE_GAME")}
                 </Button>
-              </CardFooter>
-            </Card>
+              </Card.Footer>
+            </Card.Root>
           </>
         )}
-        <Card w="sm">
-          <CardBody>
-            <VStack spacing="24px" alignItems="start">
+        <Card.Root w="sm">
+          <Card.Body>
+            <VStack gap="24px" alignItems="start">
               <Heading size="md">{t("JOIN_GAME")}</Heading>
-              <InputGroup>
-                <InputLeftAddon>{t("GAME_ID")}</InputLeftAddon>
+              <InputGroup startAddon={t("GAME_ID")}>
                 <Input
                   placeholder={t("GAME_ID")}
                   value={joinRoomId}
                   onChange={(e) => setJoinRoomId(e.target.value)}
                 />
               </InputGroup>
-              <InputGroup>
-                <InputLeftAddon>{t("YOUR_NAME")}</InputLeftAddon>
+              <InputGroup startAddon={t("YOUR_NAME")}>
                 <Input
                   value={playerName}
                   onChange={(e) => setPlayerName(e.target.value)}
@@ -238,19 +214,20 @@ const GamePage = () => {
                 />
               </InputGroup>
             </VStack>
-          </CardBody>
-          <Divider sx={{ borderColor: "gray.300" }} />
-          <CardFooter justifyContent="flex-end">
+          </Card.Body>
+          <Separator borderColor="gray.300" />
+          <Card.Footer justifyContent="flex-end">
             <Button
               size="sm"
               variant="solid"
-              colorScheme="blue"
+              colorPalette="blue"
               onClick={() => joinRoom()}
+              disabled={pending}
             >
               {t("JOIN_GAME")}
             </Button>
-          </CardFooter>
-        </Card>
+          </Card.Footer>
+        </Card.Root>
       </VStack>
     </Center>
   );

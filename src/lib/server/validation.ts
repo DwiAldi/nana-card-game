@@ -1,0 +1,185 @@
+import type { MinMax } from "@/lib/game-helper";
+import { BadRequestError } from "./errors";
+
+/**
+ * Action input validation.
+ *
+ * The client speaks a flat, strictly-typed action protocol. Every request is
+ * parsed into the discriminated {@link ActionRequest} union below; unknown
+ * action names, unknown properties (including the legacy client-supplied
+ * acting identity fields `playerId`, `data` and `gameId`), and malformed
+ * identifiers are rejected before any storage access.
+ */
+
+export const MAX_PLAYER_NAME_LENGTH = 40;
+export const MAX_CHAT_MESSAGE_LENGTH = 500;
+export const MAX_BODY_BYTES = 8192;
+
+/**
+ * The min/max reveal choice. Re-exported from the shared game helper so the
+ * client and the server agree on one definition of the literal union.
+ */
+export type { MinMax };
+
+export type ActionRequest =
+  | { action: "host"; name: string }
+  | { action: "join"; roomId: string; name: string }
+  | { action: "start"; roomId: string }
+  | { action: "reveal-public"; roomId: string; cardId: string }
+  | {
+      action: "reveal-player";
+      roomId: string;
+      targetPlayerId: string;
+      minMax: MinMax;
+    }
+  | { action: "chat"; roomId: string; message: string };
+
+/**
+ * Room ids: bounded lowercase ASCII. The server mints them, so the same
+ * pattern is used to validate incoming ids and to check the ids the server
+ * generated itself.
+ */
+export const ROOM_ID_PATTERN = /^[a-z0-9]{4,32}$/;
+/**
+ * Card ids are 96-bit opaque values minted by the server
+ * (`randomBytes(12).toString("hex")`): 24 lowercase hex characters that
+ * encode nothing about the card's value. The legacy value-bearing ids
+ * ("1-a" .. "12-c") are rejected: they would let a client guess a hidden
+ * card's number from its id.
+ */
+export const CARD_ID_PATTERN = /^[0-9a-f]{24}$/;
+/** Player ids are 128-bit hex values minted by the server. */
+export const PLAYER_ID_PATTERN = /^[a-f0-9]{32}$/;
+
+/** C0 control characters and DEL have no place in user-facing text. */
+const CONTROL_CHARS_PATTERN = /[\u0000-\u001F\u007F]/;
+
+function rejectControlCharacters(value: string, message: string): void {
+  if (CONTROL_CHARS_PATTERN.test(value)) throw new BadRequestError(message);
+}
+
+function requireObject(body: unknown): Record<string, unknown> {
+  if (body == null || typeof body !== "object" || Array.isArray(body)) {
+    throw new BadRequestError("Request body must be a JSON object");
+  }
+  return body as Record<string, unknown>;
+}
+
+function requireString(value: unknown): string {
+  if (typeof value !== "string") throw new BadRequestError("Malformed request");
+  return value;
+}
+
+function rejectUnknownKeys(body: Record<string, unknown>, allowed: readonly string[]): void {
+  for (const key of Object.keys(body)) {
+    if (!allowed.includes(key)) {
+      throw new BadRequestError("Request contains unknown fields");
+    }
+  }
+}
+
+function requireFields(body: Record<string, unknown>, allowed: readonly string[]): void {
+  rejectUnknownKeys(body, allowed);
+  for (const field of allowed.filter((name) => name !== "action")) {
+    if (body[field] === undefined) {
+      throw new BadRequestError("Malformed request");
+    }
+  }
+}
+
+function validatePattern(value: string, pattern: RegExp, message: string): string {
+  if (!pattern.test(value)) throw new BadRequestError(message);
+  return value;
+}
+
+export function validatePlayerName(value: unknown): string {
+  if (typeof value !== "string") throw new BadRequestError("Player name must be text");
+  const name = value.trim();
+  if (name.length === 0) throw new BadRequestError("Player name is required");
+  rejectControlCharacters(name, "Player name must not contain control characters");
+  if (name.length > MAX_PLAYER_NAME_LENGTH) {
+    throw new BadRequestError(`Player name must be at most ${MAX_PLAYER_NAME_LENGTH} characters`);
+  }
+  return name;
+}
+
+export function validateChatMessage(value: unknown): string {
+  if (typeof value !== "string") throw new BadRequestError("Message must be text");
+  const message = value.trim();
+  if (message.length === 0) throw new BadRequestError("Message is required");
+  rejectControlCharacters(message, "Message must not contain control characters");
+  if (message.length > MAX_CHAT_MESSAGE_LENGTH) {
+    throw new BadRequestError(`Message must be at most ${MAX_CHAT_MESSAGE_LENGTH} characters`);
+  }
+  return message;
+}
+
+export function validateRoomId(value: unknown): string {
+  return validatePattern(requireString(value), ROOM_ID_PATTERN, "Invalid room ID");
+}
+
+export function validateCardId(value: unknown): string {
+  return validatePattern(requireString(value), CARD_ID_PATTERN, "Invalid card ID");
+}
+
+export function validateTargetPlayerId(value: unknown): string {
+  return validatePattern(requireString(value), PLAYER_ID_PATTERN, "Invalid player ID");
+}
+
+export function validateMinMax(value: unknown): MinMax {
+  if (value !== "min" && value !== "max") {
+    throw new BadRequestError("Invalid min/max choice");
+  }
+  return value;
+}
+
+export function parseActionInput(body: unknown): ActionRequest {
+  const input = requireObject(body);
+  const action = requireString(input.action);
+
+  switch (action) {
+    case "host": {
+      requireFields(input, ["action", "name"]);
+      return { action, name: validatePlayerName(input.name) };
+    }
+    case "join": {
+      requireFields(input, ["action", "roomId", "name"]);
+      return {
+        action,
+        roomId: validateRoomId(input.roomId),
+        name: validatePlayerName(input.name),
+      };
+    }
+    case "start": {
+      requireFields(input, ["action", "roomId"]);
+      return { action, roomId: validateRoomId(input.roomId) };
+    }
+    case "reveal-public": {
+      requireFields(input, ["action", "roomId", "cardId"]);
+      return {
+        action,
+        roomId: validateRoomId(input.roomId),
+        cardId: validateCardId(input.cardId),
+      };
+    }
+    case "reveal-player": {
+      requireFields(input, ["action", "roomId", "targetPlayerId", "minMax"]);
+      return {
+        action,
+        roomId: validateRoomId(input.roomId),
+        targetPlayerId: validateTargetPlayerId(input.targetPlayerId),
+        minMax: validateMinMax(input.minMax),
+      };
+    }
+    case "chat": {
+      requireFields(input, ["action", "roomId", "message"]);
+      return {
+        action,
+        roomId: validateRoomId(input.roomId),
+        message: validateChatMessage(input.message),
+      };
+    }
+    default:
+      throw new BadRequestError("Unknown action");
+  }
+}

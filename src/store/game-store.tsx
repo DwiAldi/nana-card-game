@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { popRandom, shuffle } from "@/lib/random";
+import { popRandom } from "@/lib/random";
 import { immer } from "zustand/middleware/immer";
 
 const INIT_CARD_IDS = [
@@ -16,7 +16,7 @@ const INIT_CARD_IDS = [
 
 const INIT_CARDS: Card[] = INIT_CARD_IDS.map((id) => ({
   id: id,
-  number: id.split("-")[0] as unknown as number,
+  number: Number(id.split("-")[0]),
   isRevealed: false,
 }));
 
@@ -48,15 +48,16 @@ interface GameState {
   // botCards: string[];
 }
 interface GameStateActions {
-  resetTable: any;
-  getPlayer: (playerId: string) => Player;
-  // dealToMe: any;
-  dealRandomCardTo: any;
-  getRevealedCards: any;
-  setGameStage: any;
-  revealPlayerCard: any;
-  revealPublicCard: any;
-  dealRestOfCards: any;
+  resetTable: () => void;
+  getPlayer: (playerId: string) => Player | undefined;
+  dealRandomCardTo: (playerId: string) => void;
+  getRevealedCards: () => Card[];
+  setGameStage: (stage: GameStage) => void;
+  setGameSubStage: (stage: GameSubStage) => void;
+  revealPlayerCard: (playerId: string, cardId: string) => void;
+  revealPublicCard: (cardId: string) => void;
+  dealRestOfCards: () => void;
+  sortPlayerCards: () => void;
 }
 
 export const useGameStore = create<GameState & GameStateActions>()(
@@ -124,26 +125,28 @@ export const useGameStore = create<GameState & GameStateActions>()(
       return get().players.find((p) => p.id === playerId);
     },
     getRevealedCards: () => {
-      let activeCards = [...get().publicCards];
+      const activeCards = [...get().publicCards];
       get().players.forEach((u) => activeCards.push(...u.hand));
       return activeCards.filter((c) => c.isRevealed);
     },
     revealPlayerCard: (playerId: string, cardId: string) => {
       set((state) => {
         const targetPlayer = state.players.find((p) => p.id === playerId);
-        targetPlayer.hand.find((c) => c.id === cardId).isRevealed = true;
+        const targetCard = targetPlayer?.hand.find((c) => c.id === cardId);
+        if (targetCard) targetCard.isRevealed = true;
       });
     },
     revealPublicCard: (cardId: string) => {
       set((state) => {
-        state.publicCards.find((c) => c.id === cardId).isRevealed = true;
+        const targetCard = state.publicCards.find((c) => c.id === cardId);
+        if (targetCard) targetCard.isRevealed = true;
       });
     },
     dealRandomCardTo: (playerId: string) => {
       set((state) => {
         const popCard = popRandom(state.cardDeck);
         const targetPlayer = state.players.find((p) => p.id === playerId);
-        targetPlayer.hand.push(popCard);
+        if (targetPlayer && popCard) targetPlayer.hand.push(popCard);
         // state.players[0].hand.push(popCard);
       });
     },

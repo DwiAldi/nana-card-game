@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useEffectEvent } from "react";
 import { Box, HStack } from "@chakra-ui/react";
 import { Card } from "@/types";
 import { useGameSound } from "@/lib/use-game-sound";
@@ -19,10 +19,11 @@ const LocalPublicArea = ({
 }: LocalPublicAreaProps) => {
   const { playWoosh } = useGameSound();
   const revealedCount = cards.filter((card) => card.isRevealed).length;
+  const playRevealSound = useEffectEvent(playWoosh);
 
   useEffect(() => {
     if (revealedCount > 0) {
-      playWoosh();
+      playRevealSound();
     }
   }, [revealedCount]);
 
@@ -38,10 +39,11 @@ const LocalPublicArea = ({
             }}
             key={card.id}
             cardId={card.id}
+            number={card.number}
             isRevealed={card.isRevealed}
             w="90px"
             h="120px"
-            sx={{
+            style={{
               cursor: isMyTurn && !card.isRevealed ? "pointer" : "default",
               opacity: isMyTurn ? 1 : 0.8,
             }}
@@ -62,4 +64,3 @@ const LocalPublicArea = ({
 };
 
 export default LocalPublicArea;
-

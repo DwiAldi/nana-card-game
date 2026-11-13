@@ -1,12 +1,11 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { motion, useSpring } from "framer-motion";
+import { motion, useSpring, type Transition } from "framer-motion";
 import { Box } from "@chakra-ui/react";
+import Image from "next/image";
 
-import { SystemStyleObject } from "@chakra-ui/styled-system";
-
-const spring = {
+const spring: Transition = {
   type: "spring",
   stiffness: 300,
   damping: 40,
@@ -31,10 +30,10 @@ const NanaCardBody = ({
   number,
   variant,
 }: {
-  number: string;
+  number?: number;
   variant: "front" | "back";
 }) => {
-  let imgFileName = cardAssetMap.get(number);
+  const imgFileName = number === undefined ? undefined : cardAssetMap.get(String(number));
   return (
     <Box
       w="100%"
@@ -43,16 +42,21 @@ const NanaCardBody = ({
       border="1px solid gray"
       borderRadius="10px"
       overflow="hidden"
+      position="relative"
     >
-      {variant === "front" ? (
-        <img
-          style={{ width: "100%", height: "100%" }}
+      {variant === "front" && imgFileName ? (
+        <Image
+          fill
+          sizes="90px"
+          style={{ objectFit: "fill" }}
           src={`/img/nana/${imgFileName}`}
           alt="front"
         />
       ) : (
-        <img
-          style={{ width: "100%", height: "100%" }}
+        <Image
+          fill
+          sizes="90px"
+          style={{ objectFit: "fill" }}
           src="/img/nana/card_back.png"
           alt="back"
         />
@@ -63,18 +67,20 @@ const NanaCardBody = ({
 
 const NanaCard = ({
   cardId,
+  number,
   w,
   h,
   onClick,
   isRevealed,
   // onFlipToFront,
   // onFlipToBack,
-  sx,
+  style,
 }: {
   cardId: string;
+  number?: number;
   w: string;
   h: string;
-  sx?: SystemStyleObject;
+  style?: React.CSSProperties;
   onClick: (cardId: string) => void;
   isRevealed: boolean;
   // onFlipToFront: any;
@@ -82,11 +88,12 @@ const NanaCard = ({
 }) => {
   const [rotateXaxis, setRotateXaxis] = useState(0);
   const [rotateYaxis, setRotateYaxis] = useState(0);
-  const ref = useRef(null);
+  const ref = useRef<HTMLDivElement>(null);
+  const showFace = isRevealed && number !== undefined;
 
-  const handleMouseMove = (event: any) => {
+  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
     const element = ref.current;
-    // @ts-ignore
+    if (!element) return;
     const elementRect = element.getBoundingClientRect();
     const elementWidth = elementRect.width;
     const elementHeight = elementRect.height;
@@ -111,23 +118,21 @@ const NanaCard = ({
   useEffect(() => {
     dx.set(-rotateXaxis);
     dy.set(rotateYaxis);
-  }, [rotateXaxis, rotateYaxis]);
+  }, [dx, dy, rotateXaxis, rotateYaxis]);
 
   return (
     <motion.div
       layoutId={cardId}
       onClick={() => onClick(cardId)}
       transition={spring}
-      style={
-        {
+      style={{
           perspective: "1200px",
           transformStyle: "preserve-3d",
           width: w,
           height: h,
           cursor: "pointer",
-          ...sx,
-        } as any
-      }
+        ...style,
+      }}
     >
       <motion.div
         ref={ref}
@@ -151,32 +156,33 @@ const NanaCard = ({
           }}
         >
           <motion.div
-            animate={{ rotateY: isRevealed ? -180 : 0 }}
+            animate={{ rotateY: showFace ? -180 : 0 }}
             transition={spring}
             style={{
               width: "100%",
               height: "100%",
-              zIndex: isRevealed ? 0 : 1,
+              zIndex: showFace ? 0 : 1,
               backfaceVisibility: "hidden",
               position: "absolute",
             }}
           >
-            <NanaCardBody number={cardId.split("-")[0]} variant="back" />
+            <NanaCardBody variant="back" />
           </motion.div>
-          <motion.div
+          {showFace && <motion.div
             initial={{ rotateY: 180 }}
-            animate={{ rotateY: isRevealed ? 0 : 180 }}
+            animate={{ rotateY: showFace ? 0 : 180 }}
             transition={spring}
             style={{
               width: "100%",
               height: "100%",
-              zIndex: isRevealed ? 1 : 0,
+              zIndex: showFace ? 1 : 0,
               backfaceVisibility: "hidden",
               position: "absolute",
             }}
           >
-            <NanaCardBody number={cardId.split("-")[0]} variant="front" />
+            <NanaCardBody number={number} variant="front" />
           </motion.div>
+          }
         </div>
       </motion.div>
       {/*<span style={{ position: "absolute", bottom: 0 }}>{cardId}</span>*/}

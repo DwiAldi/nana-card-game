@@ -1,32 +1,26 @@
 "use client";
 
-import { Card } from "@/types";
+import { DisplayCard } from "@/types";
 import { Box, HStack, Text } from "@chakra-ui/react";
 import { motion } from "framer-motion";
 import NanaCard from "@/components/NanaCard";
-import React, { useEffect } from "react";
 
-const CollectionArea = ({ cards }: { cards: Card[] }) => {
+const CollectionArea = ({ cards }: { cards: DisplayCard[] }) => {
   const groupedCards = cards.reduce(
     (acc, card) => {
+      if (card.number === undefined) return acc;
       if (!acc[card.number]) {
         acc[card.number] = [];
       }
       acc[card.number].push(card);
       return acc;
     },
-    {} as { [key: string]: Card[] },
+    {} as { [key: string]: DisplayCard[] },
   );
 
   return (
-    <HStack
-      sx={{
-        // border: "1px solid white",
-        width: "220px",
-        height: "-webkit-fill-available",
-      }}
-    >
-      {cards.length > 0 && <Text color="white">已收集:</Text>}
+    <HStack width="220px" height="-webkit-fill-available">
+      {cards.length > 0 && <Text color="white">Collected:</Text>}
       {Object.keys(groupedCards).map((key) => (
         <Box h="64px" w="45px" key={key}>
           {groupedCards[key].map((c, i) => (
@@ -39,6 +33,7 @@ const CollectionArea = ({ cards }: { cards: Card[] }) => {
               <NanaCard
                 onClick={() => {}}
                 cardId={c.id}
+                number={c.number}
                 isRevealed={true}
                 w="45px"
                 h="60px"

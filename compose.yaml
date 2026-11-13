@@ -1,0 +1,64 @@
+name: nana-card-game
+
+services:
+  app:
+    build:
+      context: .
+      target: runtime
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN to the public HTTPS origin}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@redis:6379/0
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-3600}
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-0}
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/api/health').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    init: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+
+  redis:
+    image: redis:8.10.3-alpine
+    command:
+      - sh
+      - -c
+      - exec redis-server --appendonly yes --requirepass "$${REDIS_PASSWORD}"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli --no-auth-warning -a "$${REDIS_PASSWORD}" ping | grep -q PONG
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  redis-data:

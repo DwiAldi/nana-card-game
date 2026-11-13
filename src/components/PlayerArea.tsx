@@ -1,41 +1,50 @@
 "use client";
 
-import React, { useEffect } from "react";
-import { Box, VStack, HStack, Button, Center, Text } from "@chakra-ui/react";
-import { SystemStyleObject } from "@chakra-ui/styled-system";
+import React, { useEffect, useEffectEvent } from "react";
+import {
+  VStack,
+  HStack,
+  Button,
+  Center,
+  Text,
+} from "@chakra-ui/react";
 import PlayerInfo from "@/components/PlayerInfo";
 import HandArea from "@/components/HandArea";
 import CollectionArea from "@/components/CollectionArea";
-import { ActionPrefix, Player } from "@/types";
+import { MultiplayerAction, PublicPlayer } from "@/types";
 import { useGameSound } from "@/lib/use-game-sound";
 
 const PlayerArea = ({
-  sx,
   isMe = false,
   player,
   act,
+  disabled = false,
 }: {
-  sx?: SystemStyleObject;
   isMe?: boolean;
-  player: Player | undefined;
-  act: (action: ActionPrefix, data?: any) => void;
+  player: PublicPlayer | undefined;
+  act: (action: MultiplayerAction, data?: unknown) => void;
+  disabled?: boolean;
 }) => {
   const { playWoosh, playSuccess } = useGameSound();
-  const revealedCount = player?.hand.filter((card) => card.isRevealed).length;
+  // Every card in the viewer's own hand is visible in their private
+  // projection. Only opponent/table reveals should drive the reveal sound.
+  const revealedCount = isMe ? 0 : player?.hand.filter((card) => card.isRevealed).length;
   const collectionCount = player?.collection?.length;
+  const playRevealSound = useEffectEvent(playWoosh);
+  const playCollectionSound = useEffectEvent(playSuccess);
 
   useEffect(() => {
-    revealedCount && revealedCount > 0 && playWoosh();
+    if (revealedCount && revealedCount > 0) playRevealSound();
   }, [revealedCount]);
 
   useEffect(() => {
-    collectionCount && collectionCount > 0 && playSuccess();
+    if (collectionCount && collectionCount > 0) playCollectionSound();
   }, [collectionCount]);
 
   if (!player) {
     return (
       <Center
-        sx={{
+        css={{
           // width: "576px",
           width: "100%",
           height: "256px",
@@ -45,7 +54,7 @@ const PlayerArea = ({
         }}
       >
         <Text color="white" fontSize="xl">
-          等待加入
+          Waiting for a player
         </Text>
       </Center>
     );
@@ -53,18 +62,17 @@ const PlayerArea = ({
 
   return (
     <VStack
-      sx={{
+      css={{
         // width: "576px",
         width: "100%",
         height: "256px",
         backgroundColor: "transparent",
         padding: "8px",
         borderRadius: "8px",
-        ...sx,
       }}
     >
       <Center
-        sx={{
+        css={{
           width: "-webkit-fill-available",
           height: "78px",
           paddingX: "12px",
@@ -77,41 +85,39 @@ const PlayerArea = ({
       {player.hand && player.hand.length > 0 && (
         <HStack w="-webkit-fill-available">
           <Button
-            colorScheme="gray"
+            colorPalette="gray"
             size="sm"
-            sx={{
-              textWrap: "wrap",
-              width: "32px",
-              height: "90px",
-              writingMode: "vertical-rl",
-            }}
+            whiteSpace="normal"
+            width="32px"
+            height="90px"
+            writingMode="vertical-rl"
             onClick={() =>
-              act("action:reveal-player-card", {
+              act("reveal-player", {
                 targetPlayerId: player?.id,
                 minMax: "min",
               })
             }
+            disabled={disabled}
           >
-            选最小
+            Lowest
           </Button>
           <HandArea isMe={isMe} cards={player.hand}></HandArea>
           <Button
-            colorScheme="gray"
+            colorPalette="gray"
             size="sm"
-            sx={{
-              textWrap: "wrap",
-              width: "32px",
-              height: "90px",
-              writingMode: "vertical-rl",
-            }}
+            whiteSpace="normal"
+            width="32px"
+            height="90px"
+            writingMode="vertical-rl"
             onClick={() =>
-              act("action:reveal-player-card", {
+              act("reveal-player", {
                 targetPlayerId: player?.id,
                 minMax: "max",
               })
             }
+            disabled={disabled}
           >
-            选最大
+            Highest
           </Button>
         </HStack>
       )}

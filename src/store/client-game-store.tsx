@@ -1,24 +1,5 @@
 import { create } from "zustand";
-import { popRandom, shuffle } from "@/lib/random";
 import { immer } from "zustand/middleware/immer";
-
-const INIT_CARD_IDS = [
-  "1-a",
-  "1-b",
-  "1-c",
-  "2-a",
-  "2-b",
-  "2-c",
-  "3-a",
-  "3-b",
-  "3-c",
-];
-
-const INIT_CARDS: Card[] = INIT_CARD_IDS.map((id) => ({
-  id: id,
-  number: id.split("-")[0] as unknown as number,
-  isRevealed: false,
-}));
 
 interface Card {
   id: string;
@@ -36,7 +17,7 @@ interface Player {
 }
 
 type GameStage = string;
-type GameSubStage = string;
+type GameSubStage = string | undefined;
 
 interface GameState {
   gameStage: GameStage;
@@ -48,18 +29,10 @@ interface GameState {
   // botCards: string[];
 }
 interface GameStateActions {
-  resetTable: any;
-  getPlayer: (playerId: string) => Player;
-  // dealToMe: any;
-  // dealRandomCardTo: any;
-  // getRevealedCards: any;
-  // setGameStage: any;
-  // revealPlayerCard: any;
-  // revealPublicCard: any;
-  // dealRestOfCards: any;
-  updateCardDeck: any;
-  dealCard: any;
-  updatePlayers: any;
+  getPlayer: (playerId: string) => Player | undefined;
+  updateCardDeck: (cardDeck: Card[]) => void;
+  dealCard: (cardId: string, playerId: string) => void;
+  updatePlayers: (players: Player[]) => void;
 }
 
 export const useClientGameStore = create<GameState & GameStateActions>()(
@@ -91,8 +64,7 @@ export const useClientGameStore = create<GameState & GameStateActions>()(
     dealCard: (cardId: string, playerId: string) => {
       console.log(`deal card: ${cardId} to player: ${playerId}`);
       set((state) => {
-        let poppedCard = popCard(state.cardDeck, cardId);
-        state.cardDeck.filter((c) => c.id != cardId);
+        const poppedCard = popCard(state.cardDeck, cardId);
         let targetPlayer = state.players.find((p) => p.id === playerId);
         if (!targetPlayer) {
           targetPlayer = {
@@ -102,7 +74,7 @@ export const useClientGameStore = create<GameState & GameStateActions>()(
           };
           state.players.push(targetPlayer);
         }
-        targetPlayer.hand.push(poppedCard);
+        if (poppedCard) targetPlayer.hand.push(poppedCard);
         // state.players[0].hand.push(popCard);
       });
     },

@@ -1,6 +1,15 @@
 import { Card, Player, ServerState } from "@/types";
 import { sum7Pairs } from "@/lib/rules";
 
+/**
+ * The two reveal choices a player can make.
+ *
+ * Defined here so this client-shared module never has to import the
+ * server-only validation layer; the server re-exports the very same union
+ * from its action parser.
+ */
+export type MinMax = "min" | "max";
+
 export const allRevealedCards = (serverState: ServerState) => {
   const revealedCards: Card[] = [];
   serverState.players.forEach((p) =>
@@ -13,7 +22,7 @@ export const allRevealedCards = (serverState: ServerState) => {
 };
 
 export const isTurnOver = (serverState: ServerState): boolean => {
-  let revealedCards = allRevealedCards(serverState);
+  const revealedCards = allRevealedCards(serverState);
   if (revealedCards.length === 2) {
     return revealedCards[0].number !== revealedCards[1].number;
   }
@@ -59,18 +68,32 @@ export function challengeSuccess(cards: Card[]): boolean {
   );
 }
 
+/**
+ * Numeric comparators for card ordering.
+ *
+ * Hands must be ordered by card value so "min"/"max" means lowest/highest
+ * number. Server deck cards carry unpredictable opaque ids, so ordering by
+ * id would be arbitrary and could silently leak nothing but also select the
+ * wrong card; these comparators sort by number first and use the id only as
+ * a stable tiebreak between duplicate values.
+ */
+export const sortByNumberAsc = (a: Card, b: Card): number =>
+  a.number - b.number ||
+  a.id.localeCompare(b.id, undefined, { numeric: true });
+
+export const sortByNumberDesc = (a: Card, b: Card): number => sortByNumberAsc(b, a);
+
 export function findUnrevealedCardId(
   cards: Card[] | undefined,
-  minMax: string | "max" | "min",
+  minMax: MinMax,
 ): string | undefined {
   if (!cards) return undefined;
-  const sortedCards = [...cards].filter((c) => !c.isRevealed);
-  if (minMax === "min") {
-    sortedCards.sort(sortByIdAsc);
-  } else {
-    sortedCards.sort(sortByIdDesc);
-  }
-  return sortedCards.find((c) => !c.isRevealed)?.id;
+  const unrevealed = cards.filter((c) => !c.isRevealed);
+  if (unrevealed.length === 0) return undefined;
+  const sorted = [...unrevealed].sort(
+    minMax === "min" ? sortByNumberAsc : sortByNumberDesc,
+  );
+  return sorted[0]?.id;
 }
 
 export function getCurrentAndNextPlayer(players: Player[]): Player[] {
@@ -99,7 +122,7 @@ export const concealAllCards = (serverState: ServerState) => {
 };
 
 export const removeTargetCards = (
-  serverState: ServerState,
+  serverState: Pick<ServerState, "players" | "publicCards">,
   targetCardNumber: number,
 ) => {
   serverState.players.forEach(
@@ -109,7 +132,11 @@ export const removeTargetCards = (
   if (serverState.publicCards) {
     for (let i = 0; i < serverState.publicCards.length; i++) {
       if (serverState.publicCards[i].number === targetCardNumber) {
-        (serverState.publicCards[i] as any) = { id: undefined };
+        serverState.publicCards[i] = {
+          id: "",
+          number: targetCardNumber,
+          isRevealed: false,
+        };
       }
     }
   }
@@ -117,14 +144,14 @@ export const removeTargetCards = (
 
 export const calculateDisplayPlayerIndices = (
   myPlayerId: string | undefined,
-  players: Player[],
+  players: Array<{ id: string }>,
 ) => {
   const myIndex = players?.findIndex((p) => p.id === myPlayerId);
   if (myIndex < 0) {
     return [];
   }
 
-  let originIndex = [];
+  const originIndex = [];
 
   for (let i = 0; i < players.length; i++) {
     originIndex.push(i);

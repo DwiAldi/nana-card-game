@@ -8,15 +8,15 @@ import { useGameSound } from "@/lib/use-game-sound";
 import { useGameSettingsStore } from "@/store/setting-store";
 
 const VolumeButton = () => {
-  let { soundEnabled, toggleSoundEnabled } = useGameSettingsStore();
+  const { soundEnabled, toggleSoundEnabled } = useGameSettingsStore();
 
-  let { playToggle } = useGameSound();
+  const { playToggle } = useGameSound();
 
   return (
     <IconButton
       variant="outline"
       color="white"
-      colorScheme="none"
+      colorPalette="gray"
       aria-label="Sound"
       size="sm"
       fontSize="20px"
@@ -26,8 +26,9 @@ const VolumeButton = () => {
         }
         toggleSoundEnabled();
       }}
-      icon={soundEnabled ? <BiVolumeFull /> : <BiVolumeMute />}
-    />
+    >
+      {soundEnabled ? <BiVolumeFull /> : <BiVolumeMute />}
+    </IconButton>
   );
 };
 

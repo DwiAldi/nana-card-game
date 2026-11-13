@@ -3,7 +3,7 @@
 import React from "react";
 import NanaCard from "@/components/NanaCard";
 import { Box, HStack } from "@chakra-ui/react";
-import { Card } from "@/types";
+import { DisplayCard } from "@/types";
 import { useGameToast } from "@/lib/use-game-toast";
 
 const HandArea = ({
@@ -11,43 +11,35 @@ const HandArea = ({
   cards,
 }: {
   isMe: boolean;
-  cards: Card[] | undefined;
+  cards: DisplayCard[] | undefined;
 }) => {
-  let { toastError, toastInfo, toastOk } = useGameToast();
+  const { toastInfo } = useGameToast();
 
   return (
     <HStack h="136px" w="-webkit-fill-available" padding="8px">
       {cards?.map((card) => (
         <Box
           key={card.id}
-          sx={{
-            height: "100%",
-            width: "100%",
-            maxWidth: "90px",
-            position: "relative",
-            // border: "1px solid white",
-          }}
+          height="100%"
+          width="100%"
+          maxWidth="90px"
+          position="relative"
         >
           <NanaCard
-            sx={{
+            style={{
               position: "absolute",
-              top: isMe && card.isRevealed ? "-32px" : "0",
+              top: !isMe && card.isRevealed ? "-32px" : "0",
             }}
-            onClick={() => toastInfo("只可以选择玩家的最大/最小手牌")}
+            onClick={() => toastInfo("You can only select a player's lowest or highest card")}
             cardId={card.id}
-            isRevealed={isMe ? true : card.isRevealed}
+            number={card.number}
+            isRevealed={card.isRevealed}
             w="90px"
             h="120px"
           />
         </Box>
       ))}
-      <Box
-        sx={{
-          height: "100%",
-          width: "50%",
-          // border: "1px solid white",
-        }}
-      ></Box>
+      <Box height="100%" width="50%" />
     </HStack>
   );
 };

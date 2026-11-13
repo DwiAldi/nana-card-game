@@ -1,69 +1,69 @@
-# 机器人逻辑
+# Bot Logic
 
-单人游戏模式（人类玩家 vs 1-5个bot），bot难度为**困难级**，追求最大胜率，公共区翻牌为随机抽取。bot严格知道自己的完整手牌（排序列表），但对其他玩家和公共区只能通过观察和推理获取信息。
+Single-player mode (one human versus 1–5 bots) uses **hard** bots that aim to maximize their win rate. Public-area reveals are random draws. A bot knows its complete, sorted hand, but can learn about other players and the public area only through observation and inference.
 
-### bot的记忆系统（完美记忆 + 推理）
+### Bot memory (perfect recall and inference)
 
-bot维护一个全局知识库，实时更新：
+Each bot maintains a global knowledge base, updated in real time:
 
-- **自己的手牌**：完整排序列表（从小到大），包括相同数字。知道精确的头值（最小）和尾值（最大），以及手牌数量。
-- **其他玩家的手牌信息**：
-  - 当前手牌（包括已知的牌和未知的牌）。
-  - 已知头值（如果曾经成功翻开过该玩家的最小牌且之后未移除该端，则当前头仍是该值）。
-  - 已知尾值（同理）。
-  - 下界和上界推理：头值 → 所有牌 ≥ 该值；尾值 → 所有牌 ≤ 该值。
-  - 已排除的数字：结合全局牌库和已见牌推理某些数字不可能在该玩家手中。
-  - 手牌可能有重复数字（同数字多张连在一起）。翻头后如果有重复，头值不变直到移除。
-- **已收集的三条**：每位玩家（包括自己）已收集的数字套数和具体数字（因为成功时三张牌是公开的）。
-- **公共区信息**：
-  - 剩余牌（包括已知的牌和未知的牌）。
-- **全局牌库追踪**：
-  - 每个数字1-12剩余多少张（初始3张，减去已收集的三条，减去已知位置的牌）。
-- **历史翻牌记录**：所有曾经翻开的牌（值 + 来源），用于持续更新上述推理。
+- **Its own hand**: the complete ascending list, including duplicates. The bot knows the exact head (minimum), tail (maximum), and hand size.
+- **Other players' hands**:
+  - Current cards, both known and unknown.
+  - Known head value: if that player's minimum card was revealed and that end has not subsequently been removed, the head still has that value.
+  - Known tail value, under the same conditions.
+  - Lower and upper bounds: a head value implies all cards are at least that value; a tail value implies all cards are at most that value.
+  - Excluded numbers: infer numbers that cannot be in a player's hand using the global deck and observed cards.
+  - Hands may contain duplicates, which are adjacent in sorted order. Revealing a head with duplicates leaves the head value unchanged until removal.
+- **Collected sets of three**: each player's collected set count and exact numbers, including the bot's own sets, since all three cards are public on success.
+- **Public area**:
+  - Remaining cards, both known and unknown.
+- **Global deck tracking**:
+  - Remaining copies of each number from 1 to 12: initially three, minus collected sets and cards at known locations.
+- **Reveal history**: every revealed card's value and source, used to continuously update these inferences.
 
-每次任何牌被翻开（无论成功或失败），bot立即重新计算所有概率和可能目标。
+Whenever any card is revealed, whether the challenge succeeds or fails, the bot immediately recalculates all probabilities and possible targets.
 
-### bot决策流程（困难级，追求胜率）
+### Bot decision process (hard mode, maximizing win rate)
 
-bot每回合会尝试多条链（直到失败），决策目标是**最大化当回合预期收集三条的数量**
+A bot may attempt multiple chains per turn until it fails. Its decision objective is to **maximize the expected number of sets collected during the current turn**.
 
-#### 总体框架
+#### Overall framework
 
-当前链状态分为四种：空链、已翻1张（目标数字T）、已翻2张（目标T，已有两张）。
+The draft describes the chain states as four states, but enumerates these three: an empty chain, one revealed card (target number T), and two revealed cards (both T).
 
-每次选择下一张翻牌时，bot枚举所有可能行动（所有玩家的头/尾 + 公共区），计算该行动的**期望收益**（成功概率 × 收益 + 失败风险），选择期望最高的行动。
+For each next reveal, enumerate every possible action (each player's head/tail and the public area). Calculate each action's **expected payoff** (success probability × reward, plus failure risk) and choose the highest.
 
-收益定义：成功收集一套三条 = +1套（向胜利靠近）。
+Reward: successfully collecting a set of three earns +1 set, moving closer to victory.
 
-#### 严格优先级（基于你提供的框架，优化后）
+#### Strict priorities (refining the proposed framework)
 
-1. **最高优先：已知能立即完成三张相同（确定性三条）**
+1. **Highest priority: a known, immediately completable set of three**
 
-   - 如果当前已有2张T，且存在至少一个行动能100%翻到T（例如某玩家头/尾已知是T，或自己的头/尾是T），直接选择那个确定性行动。
-   - 这几乎是必执行，因为确定性成功率100%，且能继续回合。
+   - With two Ts already revealed, if an action guarantees another T (such as a player's known head/tail or the bot's own head/tail), choose that certain action immediately.
+   - This is effectively mandatory: success is guaranteed and the turn continues.
 
-2. **次高优先：已知有两张相同（当前链有1张T，或空链但能开启高价值链）**
+2. **Second priority: two known matching cards (one T in the chain, or an empty chain that can start a valuable sequence)**
 
-   - 当前链已有1张T：寻找剩余的第三张T（优先确定性来源 → 高概率来源）。
-   - 空链但已知某处有两张可立即翻的相同牌（例如两个已知头/尾都是同一个数字S）：先翻其中一个作为起点，再按高概率找第二张S，最后确定性翻第三个。
-   - 寻找策略：
-     - 先扫描所有已知头/尾是否是T。
-     - 再计算公共区概率：剩余T张数 / 公共区剩余总数。
-     - 再对未知头/尾估算概率：结合该玩家下界/上界、排除数字、全局剩余T张数、该玩家手牌数量，计算“该端是T”的概率（用超几何分布近似）。
-     - 选择概率最高的来源翻第三张。
-     - 如果概率都很低，考虑放弃当前链（故意翻不匹配结束回合，防止暴露信息）——困难bot会计算是否值得冒险。
+   - With one T already in the chain, find the remaining third T, preferring certain sources, then high-probability sources.
+   - With an empty chain and two immediately accessible matching cards (for example, two known heads/tails with number S), reveal one to start, then seek the second S from a high-probability source, and finally reveal the guaranteed third copy.
+   - Search strategy:
+     - Scan all known heads/tails for T.
+     - Calculate public-area probability: remaining copies of T / total remaining public cards.
+     - Estimate unknown head/tail probabilities using the player's lower/upper bounds, excluded numbers, global remaining copies of T, and hand size. Approximate the probability that the end is T with a hypergeometric distribution.
+     - Reveal the third card from the highest-probability source.
+     - If all probabilities are low, consider abandoning the chain by deliberately revealing a mismatch to end the turn and avoid exposing information. A hard bot evaluates whether the risk is worthwhile.
 
-3. **中等优先：只有单张已知（探索潜在三条）**
+3. **Medium priority: only one known card (explore a potential set)**
 
-   - 扫描所有已知头/尾和自己的手牌，找出剩余张数最多的数字（全局剩余2或3张的数字优先）。
-   - 优先翻“最大”或“最小”已知值作为起点（因为极端值往往信息价值高，暴露后对手难以利用）。
-   - 然后寻找该数字的另外两张：
-     - 优先高概率来源（同上，确定性 > 公共区概率 > 未知端估算概率）。
-     - 如果全局剩余只有1张，跳过该数字（不可能成三条）。
+   - Scan all known heads/tails and the bot's own hand for numbers with the most remaining copies, preferring numbers with two or three copies remaining globally.
+   - Prefer the largest or smallest known value as a starting point: extreme values often provide more information and are harder for opponents to exploit after exposure.
+   - Then seek the other two copies:
+     - Prefer high-probability sources as above: certainty, then public-area probability, then estimates for unknown ends.
+     - Skip a number with only one remaining copy globally, since a set of three is impossible.
 
-4. **最低优先：纯探索（场上无好机会）**
-   - 随机但带偏向地揭示信息：
-     - 优先翻对手的头/尾（尤其是手牌多的对手，获取下界/上界信息）。
-     - 避免翻自己的头/尾（除非必要，防止暴露）。
-     - 偶尔翻公共区（获取已知在公共区的牌，缩小不确定性）。
-   - 选择标准：信息价值最高。
+4. **Lowest priority: pure exploration (no good opportunities)**
+   - Reveal information randomly, with a bias:
+     - Prefer opponents' heads/tails, especially opponents with many cards, to learn lower/upper bounds.
+     - Avoid revealing the bot's own heads/tails unless necessary, to limit information exposure.
+     - Occasionally reveal a public card to establish known public values and reduce uncertainty.
+   - Selection criterion: highest information value.

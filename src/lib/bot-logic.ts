@@ -4,69 +4,69 @@ import { sortByIdAsc, sortByIdDesc } from "@/lib/game-helper";
 // ==================== Types ====================
 
 /**
- * 牌槽：表示一个位置上的牌，可能已知或未知
+ * A card slot represents a card at a position; its value may be known or unknown.
  */
 export interface CardSlot {
   cardId: string;
-  number: number | null; // null 表示未知
+  number: number | null; // null means unknown.
 }
 
 /**
- * 玩家手牌记忆：从 bot 视角记录某玩家的手牌
- * 数组已排序（从小到大），已知的牌有 number，未知的牌 number 为 null
+ * A player's hand as remembered from the bot's perspective.
+ * Sorted in ascending order; known cards have a number, unknown cards have null.
  */
 export interface PlayerHandMemory {
   playerId: string;
-  cards: CardSlot[]; // 排序后的手牌槽位
+  cards: CardSlot[]; // Sorted hand slots.
 }
 
 /**
- * Bot 记忆系统 - 只存储原始事实数据
+ * Bot memory stores only raw facts.
  */
 export interface BotMemory {
   botId: string;
 
-  // 自己的手牌（完整已知）
+  // The bot's own hand (fully known).
   myHand: CardSlot[];
 
-  // 其他玩家的手牌记忆
+  // Memories of other players' hands.
   otherPlayersHands: Map<string, PlayerHandMemory>;
 
-  // 公共区牌（包含已知和未知）
+  // Public cards, both known and unknown.
   publicCards: CardSlot[];
 
-  // 已收集的三条：playerId -> 收集的数字列表
+  // Collected sets: playerId -> list of collected numbers.
   collectedSets: Map<string, number[]>;
 
-  // 游戏使用的数字范围（根据玩家数量不同）
+  // Number range used in this game, based on player count.
   numberRange: { min: number; max: number };
 }
 
 /**
- * Bot 决策结果
+ * The result of a bot decision.
  */
 export interface BotDecision {
   action: "reveal-player-card" | "reveal-public-card";
-  playerId?: string; // 目标玩家ID（翻玩家牌时）
-  minMax?: "min" | "max"; // 翻头还是翻尾
-  cardId?: string; // 公共区牌ID（翻公共牌时）
-  confidence: number; // 决策置信度 0-1
-  reasoning: string; // 决策理由（用于调试）
+  playerId?: string; // Target player ID when revealing a player's card.
+  minMax?: "min" | "max"; // Reveal the lowest or highest card.
+  cardId?: string; // Public card ID when revealing a public card.
+  confidence: number; // Decision confidence from 0 to 1.
+  reasoning: string; // Explanation for debugging.
 }
 
 /**
- * 行动候选项
+ * A candidate action.
  */
 export interface ActionCandidate {
   decision: BotDecision;
-  probability: number; // 翻到目标的概率
-  expectedValue: number; // 期望收益
+  probability: number; // Probability of revealing the target.
+  expectedValue: number; // Expected payoff.
 }
 
 // ==================== Memory Management ====================
 
 /**
- * 根据玩家数量确定数字范围
+ * Determine the number range from the player count.
  */
 export function getNumberRangeForPlayerCount(playerCount: number): {
   min: number;
@@ -74,16 +74,16 @@ export function getNumberRangeForPlayerCount(playerCount: number): {
 } {
   switch (playerCount) {
     case 2:
-      return { min: 1, max: 10 }; // 2人局去掉11、12
+      return { min: 1, max: 10 }; // Remove 11 and 12 for two players.
     case 3:
-      return { min: 1, max: 11 }; // 3人局去掉12
+      return { min: 1, max: 11 }; // Remove 12 for three players.
     default:
-      return { min: 1, max: 12 }; // 4-6人使用全部
+      return { min: 1, max: 12 }; // Use all numbers for four to six players.
   }
 }
 
 /**
- * 初始化 Bot 记忆
+ * Initialize bot memory.
  */
 export function initBotMemory(
   botId: string,
@@ -92,13 +92,13 @@ export function initBotMemory(
   publicCards: Card[],
   numberRange: { min: number; max: number }
 ): BotMemory {
-  // 1. 自己的手牌：完整已知，转换为 CardSlot[]
+  // 1. Convert the bot's fully known hand to CardSlot[].
   const myHand: CardSlot[] = botHand.map((c) => ({
     cardId: c.id,
-    number: c.number, // 完全已知
+    number: c.number, // Fully known.
   }));
 
-  // 2. 其他玩家的手牌：只知道数量，不知道具体值
+  // 2. Only the size of other players' hands is known, not their values.
   const otherPlayersHands = new Map<string, PlayerHandMemory>();
   for (const player of players) {
     if (player.id !== botId) {
@@ -106,13 +106,13 @@ export function initBotMemory(
         playerId: player.id,
         cards: player.hand.map((c) => ({
           cardId: c.id,
-          number: null, // 未知
+          number: null, // Unknown.
         })),
       });
     }
   }
 
-  // 3. 公共区牌：初始全部未知
+  // 3. All public cards are initially unknown.
   const publicCardsSlots: CardSlot[] = publicCards.map((c) => ({
     cardId: c.id,
     number: null,
@@ -129,7 +129,7 @@ export function initBotMemory(
 }
 
 /**
- * 当牌被翻开时更新记忆
+ * Update memory when a card is revealed.
  */
 export function updateMemoryOnReveal(
   memory: BotMemory,
@@ -137,19 +137,19 @@ export function updateMemoryOnReveal(
   revealedNumber: number,
   source: { type: "player"; playerId: string } | { type: "public" }
 ): BotMemory {
-  // 创建新的记忆对象（不可变更新）
+  // Create a new memory object for an immutable update.
   const newMemory = { ...memory };
 
   if (source.type === "player") {
     if (source.playerId === memory.botId) {
-      // 自己的牌被翻开（理论上已经知道，但仍需标记）
+      // Record a revealed card from our own hand, even though its value is known.
       newMemory.myHand = memory.myHand.map((slot) =>
         slot.cardId === revealedCardId
           ? { ...slot, number: revealedNumber }
           : slot
       );
     } else {
-      // 更新对应玩家手牌中的 CardSlot
+      // Update the CardSlot in the corresponding player's hand.
       const playerHand = memory.otherPlayersHands.get(source.playerId);
       if (playerHand) {
         const newOtherHands = new Map(memory.otherPlayersHands);
@@ -166,7 +166,7 @@ export function updateMemoryOnReveal(
       }
     }
   } else {
-    // 更新公共区牌
+    // Update the public cards.
     newMemory.publicCards = memory.publicCards.map((slot) =>
       slot.cardId === revealedCardId
         ? { ...slot, number: revealedNumber }
@@ -178,7 +178,7 @@ export function updateMemoryOnReveal(
 }
 
 /**
- * 当三条被收集时更新记忆
+ * Update memory when a set of three is collected.
  */
 export function updateMemoryOnCollect(
   memory: BotMemory,
@@ -187,18 +187,18 @@ export function updateMemoryOnCollect(
 ): BotMemory {
   const newMemory = { ...memory };
 
-  // 1. 记录收集
+  // 1. Record the collected set.
   const newCollectedSets = new Map(memory.collectedSets);
   const existing = newCollectedSets.get(collectorId) || [];
   newCollectedSets.set(collectorId, [...existing, collectedNumber]);
   newMemory.collectedSets = newCollectedSets;
 
-  // 2. 从自己手牌移除
+  // 2. Remove matching cards from our own hand.
   newMemory.myHand = memory.myHand.filter(
     (slot) => slot.number !== collectedNumber
   );
 
-  // 3. 从其他玩家手牌移除
+  // 3. Remove matching cards from other players' hands.
   const newOtherHands = new Map<string, PlayerHandMemory>();
   for (const [playerId, hand] of Array.from(memory.otherPlayersHands)) {
     newOtherHands.set(playerId, {
@@ -210,7 +210,7 @@ export function updateMemoryOnCollect(
   }
   newMemory.otherPlayersHands = newOtherHands;
 
-  // 4. 从公共区移除
+  // 4. Remove matching public cards.
   newMemory.publicCards = memory.publicCards.filter(
     (slot) => slot.number !== collectedNumber
   );
@@ -221,25 +221,25 @@ export function updateMemoryOnCollect(
 // ==================== Derived Calculations ====================
 
 /**
- * 获取玩家已知的头值（最小端）
- * 如果头牌已被翻开过且未被移除，返回该值；否则返回 null
+ * Get the player's known head value (lowest end).
+ * Return its value if the head was revealed and has not been removed; otherwise null.
  */
 export function getKnownHeadValue(
   memory: BotMemory,
   playerId: string
 ): number | null {
   if (playerId === memory.botId) {
-    // 自己的头值总是已知
+    // Our own head value is always known.
     return memory.myHand[0]?.number ?? null;
   }
   const hand = memory.otherPlayersHands.get(playerId);
   if (!hand || hand.cards.length === 0) return null;
-  // 头牌（第一张）如果已知则返回
+  // Return the head (first card) value if known.
   return hand.cards[0].number;
 }
 
 /**
- * 获取玩家已知的尾值（最大端）
+ * Get the player's known tail value (highest end).
  */
 export function getKnownTailValue(
   memory: BotMemory,
@@ -254,7 +254,7 @@ export function getKnownTailValue(
 }
 
 /**
- * 获取玩家当前手牌数量
+ * Get the player's current hand size.
  */
 export function getHandSize(memory: BotMemory, playerId: string): number {
   if (playerId === memory.botId) {
@@ -264,33 +264,33 @@ export function getHandSize(memory: BotMemory, playerId: string): number {
 }
 
 /**
- * 获取某数字在全局的剩余张数
- * 计算方式：3 - 已收集的 - 已知在各位置的
+ * Get the number of copies still unaccounted for globally.
+ * Calculation: 3 minus collected copies minus copies at known locations.
  */
 export function getGlobalRemainingCount(
   memory: BotMemory,
   targetNumber: number
 ): number {
-  let remaining = 3; // 每个数字初始3张
+  let remaining = 3; // Each number starts with three copies.
 
-  // 减去已收集的
+  // Subtract collected copies.
   for (const collected of Array.from(memory.collectedSets.values())) {
     if (collected.includes(targetNumber)) {
-      return 0; // 已被收集，剩余0张
+      return 0; // Already collected; no copies remain.
     }
   }
 
-  // 减去自己手中的
+  // Subtract copies in our own hand.
   remaining -= memory.myHand.filter((s) => s.number === targetNumber).length;
 
-  // 减去其他玩家已知的
+  // Subtract known copies in other players' hands.
   for (const hand of Array.from(memory.otherPlayersHands.values())) {
     remaining -= hand.cards.filter(
       (s: CardSlot) => s.number === targetNumber
     ).length;
   }
 
-  // 减去公共区已知的
+  // Subtract known public copies.
   remaining -= memory.publicCards.filter(
     (s) => s.number === targetNumber
   ).length;
@@ -299,8 +299,8 @@ export function getGlobalRemainingCount(
 }
 
 /**
- * 获取玩家手牌中已排除的数字集合
- * 基于头尾约束推理：如果头=5，则 1-4 被排除
+ * Get the numbers excluded from a player's hand.
+ * Infer from head/tail constraints: a head of 5 excludes 1 through 4.
  */
 export function getExcludedNumbers(
   memory: BotMemory,
@@ -310,14 +310,14 @@ export function getExcludedNumbers(
   const headValue = getKnownHeadValue(memory, playerId);
   const tailValue = getKnownTailValue(memory, playerId);
 
-  // 如果头值已知，则所有 < 头值的数字被排除
+  // A known head excludes all lower numbers.
   if (headValue !== null) {
     for (let n = memory.numberRange.min; n < headValue; n++) {
       excluded.add(n);
     }
   }
 
-  // 如果尾值已知，则所有 > 尾值的数字被排除
+  // A known tail excludes all higher numbers.
   if (tailValue !== null) {
     for (let n = tailValue + 1; n <= memory.numberRange.max; n++) {
       excluded.add(n);
@@ -328,14 +328,14 @@ export function getExcludedNumbers(
 }
 
 /**
- * 获取公共区未知牌数量
+ * Get the number of unknown public cards.
  */
 export function getUnknownPublicCount(memory: BotMemory): number {
   return memory.publicCards.filter((s) => s.number === null).length;
 }
 
 /**
- * 获取公共区中某数字的已知张数
+ * Get the number of known public copies of a number.
  */
 export function getKnownPublicCountForNumber(
   memory: BotMemory,
@@ -347,7 +347,7 @@ export function getKnownPublicCountForNumber(
 // ==================== Probability Calculation ====================
 
 /**
- * 计算翻到目标数字的概率
+ * Calculate the probability of revealing the target number.
  */
 export function calculateProbability(
   memory: BotMemory,
@@ -356,47 +356,47 @@ export function calculateProbability(
     | { type: "player"; playerId: string; position: "head" | "tail" }
     | { type: "public" }
 ): number {
-  // 全局剩余0张，概率为0
+  // No remaining copies globally means zero probability.
   const globalRemaining = getGlobalRemainingCount(memory, targetNumber);
   if (globalRemaining === 0) return 0;
 
   if (source.type === "player") {
     const { playerId, position } = source;
 
-    // 获取已知值
+    // Get the known value.
     const knownValue =
       position === "head"
         ? getKnownHeadValue(memory, playerId)
         : getKnownTailValue(memory, playerId);
 
-    // 已知值：确定性判断
+    // A known value gives a certain result.
     if (knownValue !== null) {
       return knownValue === targetNumber ? 1.0 : 0.0;
     }
 
-    // 未知值：概率估算
+    // Estimate the probability for an unknown value.
     const excluded = getExcludedNumbers(memory, playerId);
     if (excluded.has(targetNumber)) return 0;
 
-    // 简化估算：剩余张数 / 可能的数字范围
+    // Simplified estimate: remaining copies / number of possible values.
     const possibleNumbers =
       memory.numberRange.max - memory.numberRange.min + 1 - excluded.size;
     if (possibleNumbers <= 0) return 0;
 
     return Math.min(1, globalRemaining / possibleNumbers);
   } else {
-    // 公共区概率
+    // Public-area probability.
     const unknownCount = memory.publicCards.filter(
       (s) => s.number === null
     ).length;
     if (unknownCount === 0) return 0;
 
-    // 已知在公共区的数量
+    // Copies known to be in the public area.
     const knownInPublic = memory.publicCards.filter(
       (s) => s.number === targetNumber
     ).length;
 
-    // 剩余可能在公共区的数量
+    // Remaining copies that could be in the public area.
     const possibleInPublic = globalRemaining - knownInPublic;
     if (possibleInPublic <= 0) return 0;
 
@@ -407,7 +407,7 @@ export function calculateProbability(
 // ==================== Action Evaluation ====================
 
 /**
- * 获取所有可能的行动
+ * Get all possible actions.
  */
 export function getAllPossibleActions(
   memory: BotMemory,
@@ -416,30 +416,30 @@ export function getAllPossibleActions(
 ): BotDecision[] {
   const actions: BotDecision[] = [];
 
-  // 遍历所有玩家（包括自己）
+  // Iterate over all players, including ourselves.
   for (const player of players) {
     const handSize = getHandSize(memory, player.id);
     if (handSize === 0) continue;
 
-    // 检查是否有未翻开的头牌
+    // Check for an unrevealed head card.
     let hasUnrevealedHead = false;
     let hasUnrevealedTail = false;
 
     if (player.id === memory.botId) {
-      // 自己的牌
+      // Our own cards.
       hasUnrevealedHead = memory.myHand.length > 0;
       hasUnrevealedTail = memory.myHand.length > 0;
     } else {
       const hand = memory.otherPlayersHands.get(player.id);
       if (hand && hand.cards.length > 0) {
-        // 检查实际游戏中是否有未翻开的牌
+        // Check for unrevealed cards in the actual game state.
         const playerInGame = players.find((p) => p.id === player.id);
         if (playerInGame) {
           const unrevealedCards = playerInGame.hand.filter(
             (c) => !c.isRevealed
           );
           hasUnrevealedHead = unrevealedCards.some((c) => {
-            // 找到这张牌在排序后的位置
+            // Find this card's position in the sorted hand.
             const sortedUnrevealed = [...unrevealedCards].sort(sortByIdAsc);
             return c.id === sortedUnrevealed[0]?.id;
           });
@@ -472,7 +472,7 @@ export function getAllPossibleActions(
     }
   }
 
-  // 遍历公共区未翻开的牌
+  // Iterate over unrevealed public cards.
   for (const card of publicCards) {
     if (!card.isRevealed && card.id) {
       actions.push({
@@ -488,7 +488,7 @@ export function getAllPossibleActions(
 }
 
 /**
- * 寻找已知两处相同数字的情况
+ * Find two known locations with the same number.
  */
 function findKnownPairOpportunity(
   memory: BotMemory,
@@ -503,7 +503,7 @@ function findKnownPairOpportunity(
     position: "head" | "tail";
   }> = [];
 
-  // 收集所有已知的头尾值
+  // Gather all known head and tail values.
   for (const player of players) {
     const headValue = getKnownHeadValue(memory, player.id);
     const tailValue = getKnownTailValue(memory, player.id);
@@ -524,12 +524,12 @@ function findKnownPairOpportunity(
     }
   }
 
-  // 寻找两个相同数字
+  // Look for two matching numbers.
   for (let i = 0; i < knownValues.length; i++) {
     for (let j = i + 1; j < knownValues.length; j++) {
       if (knownValues[i].number === knownValues[j].number) {
         const num = knownValues[i].number;
-        // 确保这个数字还没被收集，且还有第三张
+        // Ensure this number has not been collected and a third copy remains.
         if (getGlobalRemainingCount(memory, num) >= 1) {
           return {
             number: num,
@@ -553,7 +553,7 @@ function findKnownPairOpportunity(
 }
 
 /**
- * 寻找最佳第二/第三张牌的来源
+ * Find the best source for the second or third card.
  */
 function findBestSourceForNumber(
   memory: BotMemory,
@@ -564,12 +564,12 @@ function findBestSourceForNumber(
 ): ActionCandidate | null {
   const candidates: ActionCandidate[] = [];
 
-  // 检查所有玩家的头尾
+  // Check every player's head and tail.
   for (const player of players) {
     const handSize = getHandSize(memory, player.id);
     if (handSize === 0) continue;
 
-    // 检查头
+    // Check the head.
     const headProb = calculateProbability(memory, targetNumber, {
       type: "player",
       playerId: player.id,
@@ -585,7 +585,7 @@ function findBestSourceForNumber(
         reasoning: `Probability of ${targetNumber} at ${player.id}'s head: ${(headProb * 100).toFixed(1)}%`,
       };
 
-      // 检查是否在排除列表中
+      // Check whether the number is excluded.
       const isExcluded = excludeActions.some(
         (a) =>
           a.action === decision.action &&
@@ -602,7 +602,7 @@ function findBestSourceForNumber(
       }
     }
 
-    // 检查尾（如果有多张牌）
+    // Check the tail if the hand contains multiple cards.
     if (handSize > 1) {
       const tailProb = calculateProbability(memory, targetNumber, {
         type: "player",
@@ -637,12 +637,12 @@ function findBestSourceForNumber(
     }
   }
 
-  // 检查公共区
+  // Check the public area.
   const publicProb = calculateProbability(memory, targetNumber, {
     type: "public",
   });
   if (publicProb > 0) {
-    // 找一张未翻开的公共牌
+    // Find an unrevealed public card.
     const unrevealedPublic = publicCards.find((c) => !c.isRevealed && c.id);
     if (unrevealedPublic) {
       const decision: BotDecision = {
@@ -666,13 +666,13 @@ function findBestSourceForNumber(
     }
   }
 
-  // 按概率排序，返回最高的
+  // Sort by probability and return the highest.
   candidates.sort((a, b) => b.probability - a.probability);
   return candidates[0] || null;
 }
 
 /**
- * 寻找最有价值的起始目标数字
+ * Find the most valuable target number for starting a chain.
  */
 function findBestTargetNumber(memory: BotMemory): number | null {
   let bestNumber: number | null = null;
@@ -680,12 +680,12 @@ function findBestTargetNumber(memory: BotMemory): number | null {
 
   for (let n = memory.numberRange.min; n <= memory.numberRange.max; n++) {
     const remaining = getGlobalRemainingCount(memory, n);
-    // 至少需要3张才能收集
+    // At least three copies are needed to collect a set.
     if (remaining < 3) continue;
 
-    // 优先选择自己手中有的数字
+    // Prefer numbers in our own hand.
     const myCount = memory.myHand.filter((s) => s.number === n).length;
-    const score = remaining + myCount * 2; // 自己手中的牌有额外权重
+    const score = remaining + myCount * 2; // Give our own cards extra weight.
 
     if (score > bestScore) {
       bestScore = score;
@@ -699,7 +699,7 @@ function findBestTargetNumber(memory: BotMemory): number | null {
 // ==================== Main Decision Function ====================
 
 /**
- * Bot 主决策函数
+ * Main bot decision function.
  */
 export function makeBotDecision(
   memory: BotMemory,
@@ -710,9 +710,9 @@ export function makeBotDecision(
   const chainLength = currentChain.length;
   const targetNumber = chainLength > 0 ? currentChain[0].number : null;
 
-  // ===== 已翻2张状态 (flip-3) =====
+  // ===== Two cards revealed (flip-3) =====
   if (chainLength === 2 && targetNumber !== null) {
-    // 寻找第三张目标数字
+    // Find a third copy of the target number.
     const bestSource = findBestSourceForNumber(
       memory,
       targetNumber,
@@ -727,7 +727,7 @@ export function makeBotDecision(
       };
     }
 
-    // 没有好的选择，随机翻一张（会失败但必须翻）
+    // No good option: reveal a random card (the challenge will fail, but a reveal is required).
     return makeExploratoryDecision(
       memory,
       players,
@@ -736,9 +736,9 @@ export function makeBotDecision(
     );
   }
 
-  // ===== 已翻1张状态 (flip-2) =====
+  // ===== One card revealed (flip-2) =====
   if (chainLength === 1 && targetNumber !== null) {
-    // 寻找第二张目标数字
+    // Find a second copy of the target number.
     const bestSource = findBestSourceForNumber(
       memory,
       targetNumber,
@@ -753,8 +753,8 @@ export function makeBotDecision(
       };
     }
 
-    // 概率太低，考虑放弃（翻一张不匹配的结束回合）
-    // 但也可能继续冒险，困难模式倾向于冒险
+    // Low probability: consider giving up by revealing a mismatch to end the turn.
+    // Continuing is also possible; hard mode favors taking the risk.
     if (bestSource) {
       return {
         ...bestSource.decision,
@@ -770,12 +770,12 @@ export function makeBotDecision(
     );
   }
 
-  // ===== 空链状态 (flip-1) =====
+  // ===== Empty chain (flip-1) =====
 
-  // 策略1：检查是否已知两处相同数字
+  // Strategy 1: look for two known locations with the same number.
   const pairOpp = findKnownPairOpportunity(memory, players);
   if (pairOpp) {
-    // 先翻第一个已知位置
+    // Reveal the first known location.
     const firstSource = pairOpp.sources[0];
     return {
       action: "reveal-player-card",
@@ -786,13 +786,13 @@ export function makeBotDecision(
     };
   }
 
-  // 策略2：优先翻自己的头牌作为起点
+  // Strategy 2: prefer our own head card as a starting point.
   if (memory.myHand.length > 0) {
     const myHeadNumber = memory.myHand[0].number!;
     const remaining = getGlobalRemainingCount(memory, myHeadNumber);
 
     if (remaining >= 2) {
-      // 还能凑成三条
+      // A set of three is still possible.
       return {
         action: "reveal-player-card",
         playerId: memory.botId,
@@ -803,10 +803,10 @@ export function makeBotDecision(
     }
   }
 
-  // 策略3：寻找最有价值的目标数字
+  // Strategy 3: find the most valuable target number.
   const bestTarget = findBestTargetNumber(memory);
   if (bestTarget !== null) {
-    // 找到这个数字最好的来源
+    // Find the best source for this number.
     const bestSource = findBestSourceForNumber(
       memory,
       bestTarget,
@@ -822,7 +822,7 @@ export function makeBotDecision(
     }
   }
 
-  // 策略4：探索性翻牌
+  // Strategy 4: reveal a card to gather information.
   return makeExploratoryDecision(
     memory,
     players,
@@ -832,7 +832,7 @@ export function makeBotDecision(
 }
 
 /**
- * 探索性决策（没有明确目标时）
+ * Choose an exploratory action when there is no specific target.
  */
 function makeExploratoryDecision(
   memory: BotMemory,
@@ -840,13 +840,13 @@ function makeExploratoryDecision(
   publicCards: Card[],
   reason: string
 ): BotDecision {
-  // 优先翻对手的头牌（获取信息）
+  // Prefer an opponent's head card to gather information.
   for (const player of players) {
     if (player.id === memory.botId) continue;
 
     const headValue = getKnownHeadValue(memory, player.id);
     if (headValue === null) {
-      // 头值未知，翻开它
+      // The head value is unknown; reveal it.
       const handSize = getHandSize(memory, player.id);
       if (handSize > 0) {
         return {
@@ -860,7 +860,7 @@ function makeExploratoryDecision(
     }
   }
 
-  // 翻公共牌
+  // Reveal a public card.
   const unrevealedPublic = publicCards.find((c) => !c.isRevealed && c.id);
   if (unrevealedPublic) {
     return {
@@ -871,7 +871,7 @@ function makeExploratoryDecision(
     };
   }
 
-  // 翻自己的牌（最后选择）
+  // Reveal our own card as a last resort.
   if (memory.myHand.length > 0) {
     return {
       action: "reveal-player-card",
@@ -882,7 +882,7 @@ function makeExploratoryDecision(
     };
   }
 
-  // 实在没有选择
+  // No options remain.
   return {
     action: "reveal-public-card",
     cardId: publicCards[0]?.id || "",
@@ -892,7 +892,7 @@ function makeExploratoryDecision(
 }
 
 /**
- * 评估所有行动的期望收益
+ * Evaluate the expected payoff of every action.
  */
 export function evaluateAllActions(
   memory: BotMemory,
@@ -910,7 +910,7 @@ export function evaluateAllActions(
     let expectedValue = 0;
 
     if (targetNumber !== null) {
-      // 有目标数字，计算翻到目标的概率
+      // With a target number, calculate the probability of revealing it.
       if (action.action === "reveal-player-card" && action.playerId) {
         probability = calculateProbability(memory, targetNumber, {
           type: "player",
@@ -923,17 +923,17 @@ export function evaluateAllActions(
         });
       }
 
-      // 期望收益
+      // Expected payoff.
       if (currentChain.length === 2) {
-        // 第三张，成功率就是期望收益
+        // For the third card, success probability equals expected payoff.
         expectedValue = probability;
       } else if (currentChain.length === 1) {
-        // 第二张，需要考虑后续成功的概率
-        expectedValue = probability * 0.5; // 简化估算
+        // For the second card, account for the chance of subsequent success.
+        expectedValue = probability * 0.5; // Simplified estimate.
       }
     } else {
-      // 空链，探索价值
-      expectedValue = 0.1; // 基础探索价值
+      // An empty chain has exploratory value.
+      expectedValue = 0.1; // Base exploratory value.
     }
 
     candidates.push({
@@ -943,7 +943,7 @@ export function evaluateAllActions(
     });
   }
 
-  // 按期望收益排序
+  // Sort by expected payoff.
   candidates.sort((a, b) => b.expectedValue - a.expectedValue);
 
   return candidates;

@@ -1,14 +1,15 @@
-# NANA Online Board Game [中文](https://github.com/Cyronlee/nana-card-game/blob/master/README-zh.md)
+# NANA Online Board Game
 
-An online multiplayer card game.
+An English-only online multiplayer card game with a local single-player mode against bots.
 
-![](https://github.com/Cyronlee/nana-card-game/blob/master/public/img/example.png?raw=true)
+Repository: [DwiAldi/nana-card-game](https://github.com/DwiAldi/nana-card-game).
 
-Play by visiting [https://nana.cyron.site](https://nana.cyron.site) with your browser.
+![NANA game screenshot](public/img/example.png)
 
-It supports creating rooms and joining others' rooms.
+The upstream demo is available at [https://nana.cyron.site](https://nana.cyron.site).
 
-This website is hosted on `Vercel`, made with `NextJS` and `Framer motion`, and uses `Redis` to store server states.
+It supports creating rooms and joining others' rooms. The maintained deployment
+target is a Docker-based VPS with a private Redis service.
 
 ## Development Roadmap
 
@@ -16,7 +17,7 @@ You are welcome to join in developing more features, and submitting issues to he
 
 - [x] Multiplayer online play
 - [x] Sound effects
-- [ ] Internationalization
+- [x] English-only interface
 - [ ] Adaptation for small screens
 - [ ] Seat layout optimization for different number of players
 - [ ] Scoreboard
@@ -36,7 +37,19 @@ npm run dev
 
 Visit http://localhost:2333 in your browser.
 
+## VPS Deployment
+
+The production Compose stack binds the application only to
+`127.0.0.1:3000`; expose it through an HTTPS reverse proxy. Redis is available
+only on the private Compose network and requires a deployment-provided
+password.
+
+See [docs/deployment.md](docs/deployment.md) for environment setup, launch,
+health checks, updates, rollback, and recovery guidance.
+
 ## Disclaimer
+
+Based on [Cyronlee/nana-card-game](https://github.com/Cyronlee/nana-card-game). Thanks to the upstream author and contributors for the original game implementation.
 
 This project is solely for the purpose of learning and communication of `NextJS` and `Framer motion`.
 

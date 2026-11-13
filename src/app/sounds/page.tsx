@@ -6,7 +6,7 @@ import { useGameSound } from "@/lib/use-game-sound";
 import VolumeButton from "@/components/VolumeButton";
 
 const Page = () => {
-  let { playWin, playSuccess } = useGameSound();
+  const { playWin, playSuccess } = useGameSound();
 
   return (
     <VStack w="100vw" h="100vh" bgColor="gray.700" justifyContent="center">
@@ -14,8 +14,8 @@ const Page = () => {
         Sound FX
       </Text>
       <VolumeButton></VolumeButton>
-      <Button onClick={playWin}>Win</Button>
-      <Button onClick={playSuccess}>Success</Button>
+      <Button onClick={() => playWin()}>Win</Button>
+      <Button onClick={() => playSuccess()}>Success</Button>
     </VStack>
   );
 };

@@ -1,8 +1,6 @@
 "use client";
 import React, { useEffect } from "react";
-import styled from "@emotion/styled";
-import { AnimatePresence, LayoutGroup, motion, useCycle } from "framer-motion";
-import { Box } from "@chakra-ui/react";
+import { motion, useCycle } from "framer-motion";
 
 const Child = () => {
   return (
@@ -25,109 +23,68 @@ const Example = () => {
   const [isOn, toggleOn] = useCycle(false, true);
 
   useEffect(() => {
-    setTimeout(toggleOn, 1000);
+    const timer = setTimeout(() => toggleOn(), 1000);
+    return () => clearTimeout(timer);
   }, [isOn, toggleOn]);
 
   return (
-    <Container>
-      {/*<LayoutGroup>*/}
-      {/*<AnimatePresence>*/}
+    <div
+      style={{
+        width: "200px",
+        height: "340px",
+        overflow: "visible",
+        backgroundColor: "#f3f3f3",
+        borderRadius: "20px",
+        position: "relative",
+      }}
+    >
       {isOn ? <Child /> : <Sibling />}
-      {/*</AnimatePresence>*/}
-      {/*</LayoutGroup>*/}
-    </Container>
+    </div>
   );
 };
 
 export default Example;
 
-const Container = styled.div`
-  width: 200px;
-  height: 340px;
-  overflow: visible;
-  background-color: #f3f3f3;
-  border-radius: 20px;
-  position: relative;
-`;
-
-const Small = ({ purple }: { purple? }) => (
-  <Box
-    as={motion.div}
+const Small = ({ purple = false }: { purple?: boolean }) => (
+  <motion.div
     layoutId="small"
     id="small"
     key="small"
-    w="60px"
-    h="60px"
-    bgColor="cyan"
-    overflow="visible"
-    position="absolute"
-    top={purple ? "30px" : "172px"}
-    left={purple ? "30px" : "172px"}
+    style={{
+      width: "60px",
+      height: "60px",
+      backgroundColor: "cyan",
+      overflow: "visible",
+      position: "absolute",
+      top: purple ? "30px" : "172px",
+      left: purple ? "30px" : "172px",
+    }}
   >
     Small
-  </Box>
+  </motion.div>
 );
 
-const Big = ({ purple, children }: { purple?; children? }) => (
-  <Box
-    as={motion.div}
+const Big = ({
+  purple = false,
+  children,
+}: {
+  purple?: boolean;
+  children?: React.ReactNode;
+}) => (
+  <motion.div
     layoutId="big"
     id="big"
     key="big"
-    w="60px"
-    h="60px"
-    bgColor="orange"
-    overflow="visible"
-    position="absolute"
-    top={purple ? "137px" : "110px"}
-    left={purple ? "26px" : "40px"}
-    width={purple ? "120px" : "60px"}
+    style={{
+      width: purple ? "120px" : "60px",
+      height: "60px",
+      backgroundColor: "orange",
+      overflow: "visible",
+      position: "absolute",
+      top: purple ? "137px" : "110px",
+      left: purple ? "26px" : "40px",
+    }}
   >
     {children}
-  </Box>
+  </motion.div>
 );
-
-// const Small = styled(motion.div)`
-//   width: 60px;
-//   height: 60px;
-//   overflow: visible;
-//   border-radius: 10px;
-//   position: absolute;
-//
-//   ${({ purple }) =>
-//     purple
-//       ? `
-//       background-color: #85f;
-//       top: 30px;
-//       left: 30px;
-//     `
-//       : `
-//       background-color: #0099ff;
-//       top: 172px;
-//       left: 102px;
-//     `}
-// `;
-//
-// const Big = styled(motion.div)`
-//   overflow: visible;
-//   position: absolute;
-//
-//   ${({ purple }) =>
-//     purple
-//       ? `
-//       top: 137px;
-//       left: 26px;
-//       width: 120px;
-//       height: 120px;
-//       background-color: rgba(136, 85, 255, 0.3);
-//       border-radius: 20px;
-//     `
-//       : `
-//       top: 110px;
-//       left: 40px;
-//       width: 60px;
-//       height: 60px;
-//         background-color: rgba(0, 153, 255, 0.3);
-//         border-radius: 10px;
-//     `}
-// `;

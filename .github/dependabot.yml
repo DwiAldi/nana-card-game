@@ -1,0 +1,48 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 10
+    groups:
+      npm-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:30"
+      timezone: Etc/UTC
+    groups:
+      actions-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Etc/UTC
+    groups:
+      docker-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
